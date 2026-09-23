@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #fafafa;
+    --foreground: #111827;
+    --card: #ffffff;
+    --card-foreground: #111827;
+    --border: #eaeaea;
+    --primary: #10b981;
+    --primary-foreground: #ffffff;
+    --muted: #f4f4f5;
+    --muted-foreground: #71717a;
+  }
+
+  .dark {
+    --background: #090a0d;
+    --foreground: #f4f4f5;
+    --card: #15181f;
+    --card-foreground: #f4f4f5;
+    --border: #22272e;
+    --primary: #10b981;
+    --primary-foreground: #ffffff;
+    --muted: #1d212a;
+    --muted-foreground: #a1a1aa;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Tabular figures for pricing and time tables */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom hairline borders */
+.border-hairline {
+  border-width: 1px;
+  border-color: #eaeaea;
+}
+
+.dark .border-hairline {
+  border-color: #22272e;
+}
+
+/* Subtle scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
+}
