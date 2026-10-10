@@ -178,7 +178,7 @@ export const MOCK_VENUES: Venue[] = [
     open_time: '06:00',
     close_time: '23:00',
     rating: 4.8,
-    review_count: 342,
+    review_count: 10,
     image: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1200&q=80',
     status: 'active',
     amenities: [

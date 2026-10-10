@@ -1,12 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { MOCK_VENUES } from '@/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ReviewSection } from '@/components/reviews/ReviewSection';
 import { formatVND } from '@/lib/utils';
 import {
   MapPin,
@@ -26,6 +27,19 @@ export default function VenueDetailPage() {
 
   const venue = MOCK_VENUES.find((v) => v.slug === slug) || MOCK_VENUES[0];
 
+  const [liveRating, setLiveRating] = useState({
+    rating: venue.rating,
+    reviewCount: venue.review_count,
+  });
+
+  const handleRatingUpdated = useCallback((newRating: number, newCount: number) => {
+    setLiveRating((prev) => {
+      if (prev.rating === newRating && prev.reviewCount === newCount) return prev;
+      return { rating: newRating, reviewCount: newCount };
+    });
+  }, []);
+
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Venue Hero Banner */}
@@ -42,7 +56,7 @@ export default function VenueDetailPage() {
               <div className="flex items-center gap-2">
                 <Badge variant="sport">Cơ sở tiêu chuẩn SportZone</Badge>
                 <Badge variant="warning" className="font-bold">
-                  ★ {venue.rating} ({venue.review_count} đánh giá)
+                  ★ {liveRating.rating} ({liveRating.reviewCount} đánh giá)
                 </Badge>
               </div>
               <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
@@ -65,7 +79,7 @@ export default function VenueDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Court Lists */}
+        {/* Left Column: Court Lists & Reviews */}
         <div className="lg:col-span-2 space-y-6">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white mb-2">
@@ -129,6 +143,14 @@ export default function VenueDetailPage() {
               </ul>
             </CardContent>
           </Card>
+
+          {/* Reviews & Ratings Section */}
+          <ReviewSection
+            venueId={venue.id}
+            venueSlug={venue.slug}
+            venueName={venue.name}
+            onRatingUpdated={handleRatingUpdated}
+          />
         </div>
 
         {/* Right Column: Amenities & Quick Contact */}

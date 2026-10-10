@@ -79,5 +79,23 @@ export const api = {
     get: () => apiRequest('/profile'),
     update: (body: any) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(body) }),
     changePassword: (body: any) => apiRequest('/profile/password', { method: 'PUT', body: JSON.stringify(body) }),
+  },
+
+  reviews: {
+    getVenueReviews: (venueIdOrSlug: string | number, params?: { rating?: number; page?: number; per_page?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.rating) searchParams.set('rating', String(params.rating));
+      if (params?.page) searchParams.set('page', String(params.page));
+      if (params?.per_page) searchParams.set('per_page', String(params.per_page));
+      const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+      return apiRequest(`/venues/${venueIdOrSlug}/reviews${qs}`);
+    },
+    getReviewableBookings: (venueIdOrSlug: string | number) =>
+      apiRequest(`/venues/${venueIdOrSlug}/my-reviewable-bookings`),
+    createReview: (body: { booking_id: number; rating: number; comment: string }) =>
+      apiRequest('/reviews', { method: 'POST', body: JSON.stringify(body) }),
+    updateStatus: (reviewId: number, status: 'visible' | 'hidden') =>
+      apiRequest(`/admin/reviews/${reviewId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   }
 };
+
