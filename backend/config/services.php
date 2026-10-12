@@ -35,4 +35,18 @@ return [
         ],
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
+        'fallback_model' => env('GEMINI_FALLBACK_MODEL', 'gemini-3.5-flash-lite'),
+        'embedding_model' => env('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
+        'embedding_dimensions' => (int) env('GEMINI_EMBEDDING_DIMENSIONS', 768),
+        'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
+        'connect_timeout' => (int) env('GEMINI_CONNECT_TIMEOUT', 5),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 20),
+        'timezone' => env('AI_TIMEZONE', 'Asia/Ho_Chi_Minh'),
+        'knowledge_path' => storage_path('app/ai/knowledge'),
+        'index_path' => storage_path('app/ai/index.json'),
+    ],
+
 ];

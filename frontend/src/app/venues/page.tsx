@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { MOCK_VENUES, MOCK_CATEGORIES } from '@/lib/mock-data';
 import { formatVND } from '@/lib/utils';
-import { MapPin, Search, Filter, Trophy, Star } from 'lucide-react';
+import { MapPin, Search, Trophy, Star } from 'lucide-react';
 
 function VenuesContent() {
   const searchParams = useSearchParams();
@@ -20,10 +20,27 @@ function VenuesContent() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredVenues = MOCK_VENUES.filter((venue) => {
+    // Lọc theo thành phố
     if (selectedCity !== 'all' && venue.city !== selectedCity) return false;
-    if (searchQuery && !venue.name.toLowerCase().includes(searchQuery.toLowerCase()) && !venue.district.toLowerCase().includes(searchQuery.toLowerCase())) {
+
+    // Lọc theo môn thể thao
+    if (selectedSport !== 'all') {
+      const category = MOCK_CATEGORIES.find((c) => c.code === selectedSport);
+      if (category) {
+        const hasSport = venue.courts?.some((c) => c.sport_category_id === category.id);
+        if (!hasSport) return false;
+      }
+    }
+
+    // Lọc theo từ khóa tìm kiếm (tên sân, quận/huyện)
+    if (
+      searchQuery &&
+      !venue.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !venue.district.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
       return false;
     }
+
     return true;
   });
 
@@ -59,7 +76,7 @@ function VenuesContent() {
           <select
             value={selectedSport}
             onChange={(e) => setSelectedSport(e.target.value)}
-            className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden"
+            className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden cursor-pointer"
           >
             <option value="all">Tất cả môn thể thao</option>
             {MOCK_CATEGORIES.map((c) => (
@@ -74,7 +91,7 @@ function VenuesContent() {
           <select
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value)}
-            className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden"
+            className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden cursor-pointer"
           >
             <option value="all">Tất cả thành phố</option>
             <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
@@ -84,63 +101,71 @@ function VenuesContent() {
       </div>
 
       {/* Venue List */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {filteredVenues.map((venue) => (
-          <Card key={venue.id} hoverEffect className="overflow-hidden flex flex-col justify-between">
-            <div>
-              <div className="h-48 relative overflow-hidden bg-neutral-900">
-                <img
-                  src={venue.image}
-                  alt={venue.name}
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute top-3 right-3">
-                  <Badge variant="warning" className="bg-white/95 dark:bg-neutral-900/95 font-bold shadow-xs">
-                    ★ {venue.rating} ({venue.review_count})
-                  </Badge>
-                </div>
-              </div>
-
-              <CardContent className="p-5 space-y-3">
-                <div>
-                  <h3 className="font-bold text-base text-neutral-900 dark:text-white line-clamp-1">
-                    {venue.name}
-                  </h3>
-                  <p className="text-xs text-neutral-500 flex items-center gap-1 mt-1">
-                    <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                    <span className="truncate">{venue.address}, {venue.district}</span>
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {venue.amenities?.slice(0, 3).map((amenity) => (
-                    <span
-                      key={amenity.id}
-                      className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-medium"
-                    >
-                      {amenity.name}
-                    </span>
-                  ))}
-                </div>
-              </CardContent>
-            </div>
-
-            <div className="p-5 pt-0 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between mt-2">
+      {filteredVenues.length === 0 ? (
+        <div className="text-center py-16 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-2xl bg-neutral-50/50 dark:bg-neutral-900/50">
+          <Trophy className="w-10 h-10 mx-auto text-neutral-400 mb-3" strokeWidth={1.5} />
+          <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Không tìm thấy sân phù hợp</p>
+          <p className="text-xs text-neutral-500 mt-1">Vui lòng thử lại với bộ lọc hoặc từ khóa khác.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {filteredVenues.map((venue) => (
+            <Card key={venue.id} hoverEffect className="overflow-hidden flex flex-col justify-between">
               <div>
-                <span className="text-[10px] text-neutral-400 block">Giá từ</span>
-                <span className="text-sm font-bold font-mono text-sport-600">
-                  {formatVND(venue.courts?.[0]?.hourly_rate_standard || 90000)}/h
-                </span>
+                <div className="h-48 relative overflow-hidden bg-neutral-900">
+                  <img
+                    src={venue.image}
+                    alt={venue.name}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute top-3 right-3">
+                    <Badge variant="warning" className="bg-white/95 dark:bg-neutral-900/95 font-bold shadow-xs">
+                      ★ {venue.rating} ({venue.review_count})
+                    </Badge>
+                  </div>
+                </div>
+
+                <CardContent className="p-5 space-y-3">
+                  <div>
+                    <h3 className="font-bold text-base text-neutral-900 dark:text-white line-clamp-1">
+                      {venue.name}
+                    </h3>
+                    <p className="text-xs text-neutral-500 flex items-center gap-1 mt-1">
+                      <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span className="truncate">{venue.address}, {venue.district}</span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {venue.amenities?.slice(0, 3).map((amenity) => (
+                      <span
+                        key={amenity.id}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-medium"
+                      >
+                        {amenity.name}
+                      </span>
+                    ))}
+                  </div>
+                </CardContent>
               </div>
-              <Link href={`/venues/${venue.slug}`}>
-                <Button variant="primary" size="sm" className="text-xs">
-                  Xem Lịch Sân
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        ))}
-      </div>
+
+              <div className="p-5 pt-0 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-[10px] text-neutral-400 block">Giá từ</span>
+                  <span className="text-sm font-bold font-mono text-sport-600">
+                    {formatVND(Math.min(...(venue.courts?.map(c => c.hourly_rate_standard) || [90000])))}/h
+                  </span>
+                </div>
+                <Link href={`/venues/${venue.slug}`}>
+                  <Button variant="primary" size="sm" className="text-xs">
+                    Xem Lịch Sân
+                  </Button>
+                </Link>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

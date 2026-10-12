@@ -1,4 +1,8 @@
 *
 !private/
 !public/
+!ai/
+ai/*
+!ai/knowledge/
+!ai/knowledge/*.md
 !.gitignore
