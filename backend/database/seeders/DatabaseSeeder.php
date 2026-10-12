@@ -7,6 +7,8 @@ use App\Models\Booking;
 use App\Models\BookingAddon;
 use App\Models\BookingStatusHistory;
 use App\Models\Court;
+use App\Models\MatchMember;
+use App\Models\MatchPost;
 use App\Models\Notification;
 use App\Models\Payment;
 use App\Models\PointTransaction;
@@ -423,6 +425,81 @@ class DatabaseSeeder extends Seeder
             'clicked_venue_id' => 1,
             'clicked_court_id' => 1,
             'converted_booking_id' => 1,
+        ]);
+
+        // 18. Match Posts (Kèo giao lưu tìm đối)
+        $matchPosts = [
+            [
+                'id' => 1,
+                'user_id' => 4,
+                'sport_category_id' => 2, // Cầu lông
+                'venue_id' => 1,
+                'court_id' => 4,
+                'title' => 'Tìm 2 bạn đánh đôi Cầu Lông trình độ Khá giao lưu tối nay',
+                'description' => 'Nhóm mình hiện có 2 người, cần tìm thêm 2 bạn đánh đôi vui vẻ, lịch sự. Tiền sân và cầu chia đều theo đầu người nhé.',
+                'match_date' => now()->addDays(1)->toDateString(),
+                'start_time' => '18:00:00',
+                'end_time' => '20:00:00',
+                'location_note' => 'Sân Cầu Lông VIP 1 - Chấn Hưng Sport',
+                'skill_level' => 'intermediate',
+                'required_members' => 2,
+                'current_members' => 2,
+                'estimated_cost_per_person' => 45000,
+                'contact_phone' => '0912345678',
+                'status' => 'open',
+            ],
+            [
+                'id' => 2,
+                'user_id' => 5,
+                'sport_category_id' => 3, // Pickleball
+                'venue_id' => 2,
+                'court_id' => 6,
+                'title' => 'Pickleball Tân Bình - Ghép 1 bạn giao lưu buổi chiều',
+                'description' => 'Mới tập chơi được 3 tháng, tìm bạn đánh giao lưu học hỏi kỹ thuật. Có sẵn vợt dự phòng cho bạn nào cần.',
+                'match_date' => now()->addDays(2)->toDateString(),
+                'start_time' => '17:00:00',
+                'end_time' => '18:30:00',
+                'location_note' => 'Pickleball D-Sports Park Tân Bình',
+                'skill_level' => 'beginner',
+                'required_members' => 1,
+                'current_members' => 1,
+                'estimated_cost_per_person' => 60000,
+                'contact_phone' => '0909111222',
+                'status' => 'open',
+            ],
+            [
+                'id' => 3,
+                'user_id' => 6,
+                'sport_category_id' => 1, // Bóng đá
+                'venue_id' => 1,
+                'court_id' => 1,
+                'title' => 'Cần tìm đối tác giao hữu Bóng đá 5 người tối Thứ 5',
+                'description' => 'Đội bóng văn phòng công ty cần tìm đội bạn đá giao lưu nhẹ nhàng, không ăn thua, tiền sân và nước chia đôi.',
+                'match_date' => now()->addDays(3)->toDateString(),
+                'start_time' => '19:30:00',
+                'end_time' => '21:00:00',
+                'location_note' => 'Sân Bóng Đá 1 - Chấn Hưng Sport',
+                'skill_level' => 'all',
+                'required_members' => 1,
+                'current_members' => 1,
+                'estimated_cost_per_person' => 250000,
+                'contact_phone' => '0988777666',
+                'status' => 'open',
+            ],
+        ];
+
+        foreach ($matchPosts as $mp) {
+            MatchPost::updateOrCreate(['id' => $mp['id']], $mp);
+        }
+
+        // 19. Match Members (Thành viên đã tham gia kèo 1)
+        MatchMember::updateOrCreate(['id' => 1], [
+            'id' => 1,
+            'match_post_id' => 1,
+            'user_id' => 5,
+            'message' => 'Mình tham gia với nhé, mình đánh tay phải trình độ trung bình khá.',
+            'status' => 'accepted',
+            'joined_at' => now(),
         ]);
     }
 }

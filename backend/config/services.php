@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'sepay' => [
+        'webhook_secret' => env('SEPAY_WEBHOOK_SECRET'),
+        'bank_name' => env('SEPAY_BANK_NAME', 'MBBank'),
+        'account_no' => env('SEPAY_ACCOUNT_NO'),
+        'account_name' => env('SEPAY_ACCOUNT_NAME', 'SPORTZONE'),
+        'code_prefix' => env('SEPAY_CODE_PREFIX', 'SZ'),
+    ],
+
 ];
