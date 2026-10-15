@@ -1,0 +1,158 @@
+{
+  "modified_existing_files": [
+    {
+      "path": "frontend/src/app/page.tsx",
+      "sha256_before": "64ba237c37532102e289d208ba9abbea2571c3addde8447d49bac770ab427d37",
+      "sha256_after": "d74198331ce704fe08932e6ff27cd6665484376cb54c5b94c93b6b259c997893"
+    },
+    {
+      "path": "frontend/src/app/venues/page.tsx",
+      "sha256_before": "d3e45687c3d2843b118d73aa4f540e4d45695d2abbe920df9546a0817d70401b",
+      "sha256_after": "655003a28cafb80845fad11f4403fb4c1a95afa7839239d9301afa173ec4541d"
+    },
+    {
+      "path": "frontend/src/app/dashboard/owner/addons/page.tsx",
+      "sha256_before": "1dec06535c47cd6b18af1b5ac4679ccd8e4f14e0a7160b34d6a8f70d6d60f4e5",
+      "sha256_after": "6eacaad1e8f76786416762c1becb9f1936a238ca11040c7673908af0a40b650b"
+    },
+    {
+      "path": "frontend/src/app/dashboard/owner/venues/page.tsx",
+      "sha256_before": "ae0e4585271b4a37ccca3f51b47a86f10ed82d703ea2d6cd2492e0a6f443e6d8",
+      "sha256_after": "31c17c9b3f6eaf01633df8590420023f0a7afb07f416ef8207105efce42e7d8a"
+    },
+    {
+      "path": "frontend/src/app/dashboard/owner/courts/page.tsx",
+      "sha256_before": "08fd79e0d1824518029cf0bb0449d87874444b66bc85019484f4d31a42dc2d81",
+      "sha256_after": "06460da1a882643811c587c75303d1b57ee1311f3d08e1520c41b357d567b214"
+    },
+    {
+      "path": "frontend/src/app/venues/[slug]/page.tsx",
+      "sha256_before": "dbb036c58b929b215d4ea659e57cdde2846c854de1b747d05d868e2070a50063",
+      "sha256_after": "b6849c401af4f687dd8920add21fff68d4f1fb496871e9298e4d47d47e414d66"
+    },
+    {
+      "path": "frontend/src/components/layout/DashboardSidebar.tsx",
+      "sha256_before": "040727b81a3583430c83b3df31844f19be7a225f262ba92907f4cdcb80f3b4fb",
+      "sha256_after": "94d2b114f18faaca0480935259b0ace636273003beb7342af1c2f111db75da84"
+    },
+    {
+      "path": "backend/routes/api.php",
+      "sha256_before": "4032fe2183a6ae4cc49d562615036a3ad7f927571d98436468ce33c2a0ebd7d1",
+      "sha256_after": "071a5d3df7473199a79bf38e94f8bbbad5dfa29609edf473676f01fda88ca37d"
+    },
+    {
+      "path": "backend/app/Models/Addon.php",
+      "sha256_before": "094bfb5b75239db0080f74141d209bcf5196fd0d98ab758f8dd279daaeb5a270",
+      "sha256_after": "64c58cbf36386a333fa6e62acf5045b534de10c94b56e7815c93abbfb96a955b"
+    },
+    {
+      "path": "backend/app/Models/Venue.php",
+      "sha256_before": "d55a5e896cff1bb9b6ebed7fe879516505c0dd41e482c7198a003328e6d1ad4d",
+      "sha256_after": "7bf9c76955346a291b7690cb72335075a6883eb36c8e1ff9b2d5f90f60c692a9"
+    }
+  ],
+  "new_files": [
+    {
+      "path": "READ_ME_PART_2.txt",
+      "sha256": "31005cc67686f0d8ef288235885c6b7742e97bb6cb9c23cb35d1acab6f595755"
+    },
+    {
+      "path": "db/Part2Supplement.sql",
+      "sha256": "1e1af6ccfd1184998e3fb04a2a9900b9729053e896b277686dc567519e30b59f"
+    },
+    {
+      "path": "frontend/.env.part-two.example",
+      "sha256": "a6cc177f1cbb3f24a0cb193af5ef449956a89c020fa300bec9b508591f79c881"
+    },
+    {
+      "path": "backend/phpunit.part-two.xml",
+      "sha256": "38ed0b0db3056f0cc646cb8559e16ef7218ddaecd3fff0c28590101f02d96677"
+    },
+    {
+      "path": "backend/.env.part-two.example",
+      "sha256": "0d22c45894e340278f826eed3bfa58903e5a33ddba34b082bb3e216bada3a94e"
+    },
+    {
+      "path": "docs/VALIDATION_PART_2.md",
+      "sha256": "396c700883f61a30a95645896df66c38a013078288c942e6dbc093326a6fee1a"
+    },
+    {
+      "path": "docs/HUONG_DAN_PHAN_2.md",
+      "sha256": "cedec3e6677aaf80a7b0d69e5d724383e28fc7183d4390f7da1fc5dceb921f40"
+    },
+    {
+      "path": "frontend/public/venue-placeholder.svg",
+      "sha256": "28411cfdcd854db8188e9282213a5c6aa5d08b7fbcdf7f5ee4d728bd36e0bafc"
+    },
+    {
+      "path": "frontend/src/lib/venues-api.ts",
+      "sha256": "2aedd9f8443486d38706f26fc5555de839f7c4cb4d04537bf20f3f168f4feebf"
+    },
+    {
+      "path": "frontend/src/app/dashboard/owner/venues/calendar/page.tsx",
+      "sha256": "8e30a1186844ee9f6a32f88b8159e07c529287177eb74e9ff43f56289aa40f8d"
+    },
+    {
+      "path": "frontend/src/app/venues/map/page.tsx",
+      "sha256": "cce06989d183823f8d5ba5ccb7a1ba4e87ef48bc4d414c4a45107902e1c97663"
+    },
+    {
+      "path": "frontend/src/components/venues/OwnerManager.tsx",
+      "sha256": "4f971324f08e2caf775cfdfeada4ad64bc630976e1b9670cc447ccb2bc453e2b"
+    },
+    {
+      "path": "frontend/src/components/venues/Directory.tsx",
+      "sha256": "f2a7c8c473c05a9f77c930adb3774563f37d563ad89fc10987738c1142ae5089"
+    },
+    {
+      "path": "frontend/src/components/venues/VenueMap.tsx",
+      "sha256": "afcbebcd4a5ec55a0c4a0a89049dc8dfa823d127fc52478b18d9c9a6b7c947be"
+    },
+    {
+      "path": "frontend/src/components/venues/CourtCalendar.tsx",
+      "sha256": "0c2f5120b78a560ae5ab14bc5f61bba66776616bfbf2ff789e80943864057bfe"
+    },
+    {
+      "path": "frontend/src/components/venues/Shared.tsx",
+      "sha256": "7db856b5c4bb3216319504454bfa2f4669aaf924433deff801189ccb1de3d4b3"
+    },
+    {
+      "path": "backend/routes/part_two.php",
+      "sha256": "68364ff5fd14e2df94adcb145e7ffd1e82d663ad2d0a1709e09ef6017a51a99d"
+    },
+    {
+      "path": "backend/config/venues.php",
+      "sha256": "3cce55341c06e2e040472b455f826b6f34b5094104eda4045571af07718104b7"
+    },
+    {
+      "path": "backend/app/Services/VenueDirectory.php",
+      "sha256": "18372a200e6198137642af85b7c439feeb3f9db256c635db0d472378777d7e9f"
+    },
+    {
+      "path": "backend/app/Http/Controllers/Api/V1/VenueModuleController.php",
+      "sha256": "0b95878cc011160324f5df0042d77ce46bf3d9ca65d3b2df0ba825b77423ed7b"
+    },
+    {
+      "path": "backend/tests/Feature/VenueModuleTest.php",
+      "sha256": "1857cb3d17ef469e31a076654ff98cd14d067f0112da05495f625402c4513bdc"
+    },
+    {
+      "path": "backend/database/migrations/2026_10_12_000001_extend_part_two_tables.php",
+      "sha256": "fe7a40f62af7bc835bf12c691ebfa539222115ba8d3307beac5c4beca86bbb1e"
+    },
+    {
+      "path": "backend/database/seeders/PartTwoSeeder.php",
+      "sha256": "1361f59d64a40f67d47db90f1879f4972100a199960f887d82c07b0a8bce0074"
+    }
+  ],
+  "unchanged_original_files": 142,
+  "source_zip_sha256": "03080efbd9a17c1c662fe4d70715fb02b0f797349636fdb6a5cf50ddad31368f",
+  "excluded_generated_files": [
+    "node_modules",
+    ".next",
+    "vendor",
+    "tsconfig.tsbuildinfo",
+    "next-env.d.ts"
+  ],
+  "note": "Source control metadata excluded from deliverable; preserve your existing checkout metadata."
+}

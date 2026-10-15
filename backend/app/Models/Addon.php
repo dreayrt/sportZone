@@ -15,6 +15,7 @@ class Addon extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'venue_id',
         'code',
         'name',
         'category',

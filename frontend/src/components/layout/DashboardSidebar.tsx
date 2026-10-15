@@ -24,6 +24,7 @@ import {
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const partTwoPage = /^\/dashboard\/owner\/(venues|courts|addons)(\/|$)/.test(pathname);
   const { user } = useAuth();
 
   const role = user?.role || 'customer';
@@ -44,6 +45,7 @@ export function DashboardSidebar() {
     { title: 'Đơn đặt & Check-in', href: '/dashboard/owner/bookings', icon: CalendarCheck },
     { title: 'Dịch vụ & Đồ uống', href: '/dashboard/owner/addons', icon: ShoppingBag },
     { title: 'Hồ sơ cơ sở', href: '/dashboard/owner/venues', icon: Building2 },
+    { title: 'Lịch sân cơ sở', href: '/dashboard/owner/venues/calendar', icon: CalendarDays },
   ];
 
   const adminNav = [
@@ -63,7 +65,7 @@ export function DashboardSidebar() {
   };
 
   return (
-    <aside className="w-64 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex flex-col justify-between h-screen sticky top-0">
+    <aside className={`${partTwoPage ? 'hidden sm:flex' : 'flex'} w-64 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex-col justify-between h-screen sticky top-0`}>
       {/* Brand & Role Header */}
       <div>
         <div className="h-16 border-b border-neutral-200 dark:border-neutral-800 px-5 flex items-center justify-between">
