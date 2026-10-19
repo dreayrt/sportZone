@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent } from '@/components/ui/Card';
-import { MOCK_CATEGORIES, MOCK_VENUES } from '@/lib/mock-data';
+import { Filters, Page, Sport, Venue, venueRequest } from '@/lib/venues-api';
+import { Notice } from '@/components/venues/Shared';
 import { formatVND } from '@/lib/utils';
 import {
   Search,
@@ -24,6 +25,23 @@ import {
 
 export default function HomePage() {
   const router = useRouter();
+  const [categories, setCategories] = useState<Sport[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const ac = new AbortController();
+    Promise.all([
+      venueRequest<Filters>('/venues/filters', 'GET', undefined, ac.signal),
+      venueRequest<Page<Venue>>('/venues?sort=popular&per_page=3', 'GET', undefined, ac.signal),
+    ]).then(([f, v]) => {
+      setCategories(f.sports); setVenues(v.data);
+      setCities(Array.from(new Set(f.locations.map(l => l.city))));
+    }).catch(e => { if (e.name !== 'AbortError') setError(e.message); })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false); });
+    return () => ac.abort();
+  }, []);
   const [selectedSport, setSelectedSport] = useState('all');
   const [selectedCity, setSelectedCity] = useState('all');
 
@@ -71,7 +89,7 @@ export default function HomePage() {
                 className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden"
               >
                 <option value="all">Tất cả môn thể thao</option>
-                {MOCK_CATEGORIES.map((c) => (
+                {categories.map((c) => (
                   <option key={c.code} value={c.code}>{c.name}</option>
                 ))}
               </select>
@@ -86,8 +104,7 @@ export default function HomePage() {
                 className="w-full bg-transparent text-xs font-semibold text-neutral-800 dark:text-neutral-200 focus:outline-hidden"
               >
                 <option value="all">Tất cả khu vực</option>
-                <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
-                <option value="Hà Nội">Hà Nội</option>
+                {cities.map(city => <option key={city} value={city}>{city}</option>)}
               </select>
             </div>
 
@@ -116,6 +133,7 @@ export default function HomePage() {
         </div>
       </section>
 
+      <div className="max-w-7xl mx-auto px-4">{loading && <Notice>Đang tải cơ sở và môn thể thao…</Notice>}{error && <Notice error>{error}</Notice>}{!loading && !error && !venues.length && <Notice>Chưa có cơ sở đang hoạt động.</Notice>}</div>
       {/* Sport Categories Bento Grid */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between mb-8">
@@ -137,7 +155,7 @@ export default function HomePage() {
 
         {/* Bento Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MOCK_CATEGORIES.map((cat, idx) => (
+          {categories.map((cat, idx) => (
             <Link
               key={cat.id}
               href={`/venues?sport=${cat.code}`}
@@ -146,7 +164,7 @@ export default function HomePage() {
               }`}
             >
               <img
-                src={cat.banner_image}
+                src={cat.banner_image || '/venue-placeholder.svg'}
                 alt={cat.name}
                 className="w-full h-full object-cover opacity-70 group-hover:opacity-85 group-hover:scale-105 transition-all duration-500"
               />
@@ -154,7 +172,7 @@ export default function HomePage() {
               <div className="absolute bottom-6 left-6 right-6 text-white space-y-1">
                 <div className="flex items-center justify-between">
                   <Badge variant="sport" size="sm">
-                    {cat.court_count || 20}+ cụm sân
+                    {cat.courts_count ?? 0} sân đang hoạt động
                   </Badge>
                   <span className="text-xs text-neutral-300 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 font-medium">
                     Xem lịch sân <ArrowRight className="w-3 h-3" />
@@ -190,12 +208,12 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {MOCK_VENUES.map((venue) => (
+          {venues.map((venue) => (
             <Card key={venue.id} hoverEffect className="overflow-hidden flex flex-col justify-between">
               <div>
                 <div className="h-48 relative overflow-hidden bg-neutral-900">
                   <img
-                    src={venue.image}
+                    src={venue.image || '/venue-placeholder.svg'}
                     alt={venue.name}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                   />
@@ -235,7 +253,7 @@ export default function HomePage() {
                 <div>
                   <span className="text-[10px] text-neutral-400 block">Giá chỉ từ</span>
                   <span className="text-sm font-bold font-mono text-sport-600">
-                    {formatVND(venue.courts?.[0]?.hourly_rate_standard || 90000)}/h
+                    {formatVND(venue.min_price ?? 0)}/h
                   </span>
                 </div>
                 <Link href={`/venues/${venue.slug}`}>

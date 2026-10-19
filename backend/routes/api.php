@@ -155,3 +155,6 @@ Route::prefix('v1')->group(function () {
         });
     });
 });
+
+// Part 2: independent venue module routes.
+require __DIR__.'/part_two.php';

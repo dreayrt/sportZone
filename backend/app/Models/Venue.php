@@ -14,6 +14,7 @@ class Venue extends Model
     protected $table = 'venues';
 
     protected $fillable = [
+        'gallery',
         'owner_id',
         'code',
         'name',
@@ -38,6 +39,7 @@ class Venue extends Model
     protected function casts(): array
     {
         return [
+            'gallery' => 'array',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
             'rating' => 'decimal:1',
