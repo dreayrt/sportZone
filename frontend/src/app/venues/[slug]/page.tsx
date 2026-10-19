@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { Venue, venueRequest } from "@/lib/venues-api";
 import { formatVND } from "@/lib/utils";
+import { ReviewSection } from "@/components/reviews/ReviewSection";
 import {
   Notice,
   buttonClass,
@@ -19,6 +20,7 @@ export default function Page() {
   const [error, setError] = useState("");
   const [image, setImage] = useState("");
   const [courtId, setCourtId] = useState<number | null>(null);
+  const [liveRating, setLiveRating] = useState({ rating: 0, reviewCount: 0 });
   const handleBookCourt = (event: MouseEvent<HTMLAnchorElement>, id: number) => {
     if (!isLoading && !user) {
       event.preventDefault();
@@ -38,6 +40,10 @@ export default function Page() {
     )
       .then((v) => {
         setVenue(v);
+        setLiveRating({
+          rating: Number(v.rating) || 0,
+          reviewCount: Number(v.review_count) || 0,
+        });
         setImage(v.image || v.gallery?.[0] || "");
         setCourtId(v.courts?.[0]?.id || null);
       })
@@ -73,6 +79,13 @@ export default function Page() {
       [venue.image, ...(venue.gallery || [])].filter(Boolean) as string[],
     ),
   );
+  const handleRatingUpdated = (rating: number, reviewCount: number) => {
+    setLiveRating((previous) =>
+      previous.rating === rating && previous.reviewCount === reviewCount
+        ? previous
+        : { rating, reviewCount },
+    );
+  };
   return (
     <div className="max-w-7xl mx-auto px-4 py-10 space-y-8">
       <Link href="/venues" className="text-sport-700 text-sm">
@@ -115,7 +128,7 @@ export default function Page() {
           <h1 className="text-3xl font-bold">{venue.name}</h1>
           <p className="text-neutral-500">{address}</p>
           <p className="text-amber-600">
-            ★ {Number(venue.rating).toFixed(1)} · {venue.review_count} đánh giá
+            ★ {liveRating.rating.toFixed(1)} · {liveRating.reviewCount} đánh giá
           </p>
           <p className="text-sm">
             Mở cửa {venue.open_time.slice(0, 5)}–{venue.close_time.slice(0, 5)}
@@ -187,6 +200,12 @@ export default function Page() {
           <CourtCalendar courtId={courtId} />
         </section>
       )}
+      <ReviewSection
+        venueId={venue.id}
+        venueSlug={slug}
+        venueName={venue.name}
+        onRatingUpdated={handleRatingUpdated}
+      />
       <section className="space-y-4">
         <div className="flex justify-between flex-wrap gap-3">
           <h2 className="text-xl font-bold">Vị trí cơ sở</h2>

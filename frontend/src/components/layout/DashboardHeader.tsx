@@ -3,8 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { Bell, LogOut, ExternalLink, ShieldCheck, Building2, User } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
+import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
+import { LogOut, ExternalLink, ShieldCheck, Building2, User } from 'lucide-react';
 
 interface DashboardHeaderProps {
   title: string;
@@ -83,15 +83,7 @@ export function DashboardHeader({ title, description, actions }: DashboardHeader
           </div>
         )}
 
-        {/* Notifications Icon */}
-        <button
-          title="Thông báo"
-          className="relative p-2 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors"
-          aria-label="Thông báo"
-        >
-          <Bell className="w-4 h-4" strokeWidth={1.5} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sport-500 ring-2 ring-white dark:ring-neutral-950"></span>
-        </button>
+        <NotificationDropdown />
 
         {/* Logout */}
         <button

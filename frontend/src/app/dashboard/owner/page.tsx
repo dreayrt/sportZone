@@ -1,45 +1,79 @@
 'use client';
 
-import React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { DashboardHeader } from '@/components/layout/DashboardHeader';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { formatVND } from '@/lib/utils';
-import { MOCK_VENUES, MOCK_BOOKINGS } from '@/lib/mock-data';
-import { OwnerDashboardBanner } from '@/components/dashboard/OwnerDashboardBanner';
 import {
-  DollarSign,
+  AlertCircle,
+  BarChart3,
   CalendarCheck,
-  Percent,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
+  CalendarDays,
+  Clock3,
+  DollarSign,
   Plus,
-  QrCode,
-  AlertCircle
+  RefreshCw,
+  Trophy,
 } from 'lucide-react';
+import { AnalyticsBarChart } from '@/components/dashboard/AnalyticsBarChart';
+import { DashboardHeader } from '@/components/layout/DashboardHeader';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { api, type OwnerAnalyticsData } from '@/lib/api';
+import { formatVND } from '@/lib/utils';
+
+const bookingStatusLabels: Array<{
+  key: keyof OwnerAnalyticsData['booking_statistics'];
+  label: string;
+  color: string;
+}> = [
+  { key: 'total', label: 'Tổng đơn', color: 'text-neutral-900 dark:text-white' },
+  { key: 'pending', label: 'Chờ xác nhận', color: 'text-amber-600' },
+  { key: 'confirmed', label: 'Đã xác nhận', color: 'text-sky-600' },
+  { key: 'completed', label: 'Hoàn thành', color: 'text-emerald-600' },
+  { key: 'cancelled', label: 'Đã hủy', color: 'text-rose-600' },
+  { key: 'no_show', label: 'Không đến', color: 'text-neutral-500' },
+];
 
 export default function OwnerDashboardPage() {
-  const venue = MOCK_VENUES[0]; // SportZone Chấn Hưng Complex
+  const [analytics, setAnalytics] = useState<OwnerAnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadAnalytics = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const response = await api.analytics.getOwnerAnalytics();
+
+    if (response.success && response.data) {
+      setAnalytics(response.data);
+    } else {
+      setAnalytics(null);
+      setError(response.message || 'Không thể tải dữ liệu thống kê.');
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, [loadAnalytics]);
 
   return (
     <div>
       <DashboardHeader
         title="Tổng Quan Quản Lý Cơ Sở"
-        description={`Cơ sở: ${venue.name} — ${venue.address}, ${venue.district}`}
+        description="Doanh thu và hiệu suất đặt sân trên toàn bộ cơ sở thuộc tài khoản của bạn."
         actions={
           <div className="flex items-center gap-2">
             <Link href="/dashboard/owner/calendar">
               <Button variant="outline" size="sm" className="gap-1.5">
-                <CalendarCheck className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <CalendarCheck className="h-3.5 w-3.5" strokeWidth={1.5} />
                 Lịch Sân Trực Quan
               </Button>
             </Link>
             <Link href="/dashboard/owner/bookings">
               <Button variant="primary" size="sm" className="gap-1.5">
-                <Plus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.5} />
                 Đặt Sân Tại Quầy
               </Button>
             </Link>
@@ -47,201 +81,175 @@ export default function OwnerDashboardPage() {
         }
       />
 
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Double-Bezel Hero Banner for Operations */}
-        <OwnerDashboardBanner
-          venueName={venue.name}
-          todayRevenue={3250000}
-          occupancyRate={92}
-          bookingsCount={18}
-        />
-
-        {/* KPI Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="mx-auto max-w-7xl space-y-6 p-6">
+        {isLoading && (
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between text-neutral-500 text-xs font-medium mb-1">
-                <span>Doanh thu hôm nay</span>
-                <DollarSign className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-              </div>
-              <div className="text-2xl font-bold font-mono text-neutral-900 dark:text-white">
-                {formatVND(3250000)}
-              </div>
-              <p className="text-xs text-sport-600 mt-1 font-medium">
-                +14.2% so với hôm qua
-              </p>
+            <CardContent className="flex min-h-64 items-center justify-center p-8 text-sm text-neutral-500">
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              Đang tải dữ liệu thống kê...
             </CardContent>
           </Card>
+        )}
 
+        {!isLoading && error && (
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between text-neutral-500 text-xs font-medium mb-1">
-                <span>Số đơn đặt trong ngày</span>
-                <CalendarCheck className="w-4 h-4 text-sky-500" strokeWidth={1.5} />
+            <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center">
+              <AlertCircle className="h-9 w-9 text-rose-500" strokeWidth={1.5} />
+              <div>
+                <p className="font-semibold text-neutral-900 dark:text-white">Không thể tải dashboard</p>
+                <p className="mt-1 text-sm text-neutral-500">{error}</p>
               </div>
-              <div className="text-2xl font-bold font-mono text-neutral-900 dark:text-white">
-                18 <span className="text-xs text-neutral-400 font-normal">đơn</span>
-              </div>
-              <p className="text-xs text-neutral-400 mt-1">
-                4 đơn đặt qua website, 14 tại quầy
-              </p>
+              <Button variant="outline" size="sm" onClick={() => void loadAnalytics()}>
+                Thử lại
+              </Button>
             </CardContent>
           </Card>
+        )}
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between text-neutral-500 text-xs font-medium mb-1">
-                <span>Tỷ lệ lấp đầy giờ vàng (17h-21h)</span>
-                <Percent className="w-4 h-4 text-amber-500" strokeWidth={1.5} />
-              </div>
-              <div className="text-2xl font-bold font-mono text-neutral-900 dark:text-white">
-                92.5%
-              </div>
-              <p className="text-xs text-amber-600 mt-1 font-medium">
-                Còn 2 slot trống lúc 20:00
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between text-neutral-500 text-xs font-medium mb-1">
-                <span>Khách cần check-in hôm nay</span>
-                <Clock className="w-4 h-4 text-emerald-500" strokeWidth={1.5} />
-              </div>
-              <div className="text-2xl font-bold font-mono text-neutral-900 dark:text-white">
-                3 <span className="text-xs text-neutral-400 font-normal">đội</span>
-              </div>
-              <p className="text-xs text-neutral-400 mt-1">
-                Trận gần nhất lúc 18:00
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Live Court Status Grid */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between w-full">
-              <CardTitle>Tình Trạng Các Sân Hiện Tại ({venue.courts?.length} Sân)</CardTitle>
-              <Link href="/dashboard/owner/courts">
-                <Button variant="ghost" size="sm" className="text-xs gap-1 text-sport-600">
-                  Cài đặt giá sân
-                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
-                </Button>
-              </Link>
+        {!isLoading && analytics && (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: 'Doanh thu hôm nay', value: analytics.revenue.today, icon: DollarSign, color: 'text-sport-500' },
+                { label: 'Doanh thu tuần này', value: analytics.revenue.this_week, icon: CalendarCheck, color: 'text-sky-500' },
+                { label: 'Doanh thu tháng này', value: analytics.revenue.this_month, icon: CalendarDays, color: 'text-amber-500' },
+                { label: 'Doanh thu năm nay', value: analytics.revenue.this_year, icon: BarChart3, color: 'text-indigo-500' },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <Card key={label}>
+                  <CardContent className="p-4">
+                    <div className="mb-1 flex items-center justify-between text-xs font-medium text-neutral-500">
+                      <span>{label}</span>
+                      <Icon className={`h-4 w-4 ${color}`} strokeWidth={1.5} />
+                    </div>
+                    <div className="font-mono text-2xl font-bold text-neutral-900 dark:text-white">
+                      {formatVND(value)}
+                    </div>
+                    <p className="mt-1 text-xs text-neutral-400">Chỉ tính giao dịch đã thanh toán</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </CardHeader>
-          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {venue.courts?.map((court) => (
-              <div
-                key={court.id}
-                className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 space-y-3"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="font-mono text-xs text-neutral-400">{court.code}</span>
-                    <h4 className="font-bold text-sm text-neutral-900 dark:text-white mt-0.5">
-                      {court.name}
-                    </h4>
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Doanh Thu 7 Ngày Gần Nhất</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <AnalyticsBarChart
+                    points={analytics.revenue_chart.map((point) => ({
+                      key: point.date,
+                      label: point.label,
+                      value: point.revenue,
+                    }))}
+                    valueFormatter={formatVND}
+                    emptyMessage="Chưa có giao dịch đã thanh toán trong 7 ngày gần nhất."
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Trạng Thái Đặt Sân</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {bookingStatusLabels.map((status) => (
+                    <div
+                      key={status.key}
+                      className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2.5 dark:bg-neutral-900"
+                    >
+                      <span className="text-sm text-neutral-500">{status.label}</span>
+                      <span className={`font-mono text-sm font-bold ${status.color}`}>
+                        {analytics.booking_statistics[status.key].toLocaleString('vi-VN')}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    <CardTitle>Top 5 Sân Theo Lượt Đặt</CardTitle>
                   </div>
-                  <Badge variant="success">Hoạt động</Badge>
-                </div>
+                </CardHeader>
+                {analytics.top_courts.length === 0 ? (
+                  <CardContent className="py-12 text-center text-sm text-neutral-400">
+                    Chưa có booking để xếp hạng sân.
+                  </CardContent>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-neutral-200 bg-neutral-50 text-xs font-semibold text-neutral-500 dark:border-neutral-800 dark:bg-neutral-800/40">
+                        <tr>
+                          <th className="px-5 py-3">Sân</th>
+                          <th className="px-5 py-3">Cơ sở</th>
+                          <th className="px-5 py-3 text-right">Lượt đặt</th>
+                          <th className="px-5 py-3 text-right">Doanh thu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                        {analytics.top_courts.map((court, index) => (
+                          <tr key={court.court_id}>
+                            <td className="px-5 py-3.5 font-semibold text-neutral-900 dark:text-white">
+                              <span className="mr-2 font-mono text-xs text-amber-500">#{index + 1}</span>
+                              {court.court_name}
+                            </td>
+                            <td className="px-5 py-3.5 text-neutral-500">{court.venue_name}</td>
+                            <td className="px-5 py-3.5 text-right font-mono font-semibold">{court.total_bookings}</td>
+                            <td className="px-5 py-3.5 text-right font-mono font-semibold text-sport-600">
+                              {formatVND(court.revenue)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
 
-                <div className="text-xs text-neutral-500 space-y-1">
-                  <p>Mặt sân: {court.surface_type}</p>
-                  <p>Giờ thường: <strong className="font-mono text-neutral-700 dark:text-neutral-300">{formatVND(court.hourly_rate_standard)}/h</strong></p>
-                  <p>Giờ vàng (Peak): <strong className="font-mono text-amber-600">{formatVND(court.hourly_rate_peak)}/h</strong></p>
-                </div>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-sky-500" />
+                    <CardTitle>Khung Giờ Cao Điểm</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {analytics.peak_hours.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-neutral-400">
+                      Chưa có booking để tổng hợp khung giờ.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {analytics.peak_hours.map((slot) => {
+                        const maxBookings = analytics.peak_hours[0]?.booking_count || 1;
 
-                <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
-                  <span className="text-[11px] text-sport-600 font-medium flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-sport-500 animate-ping"></span>
-                    Đang có khách thi đấu
-                  </span>
-                  <Link href={`/dashboard/owner/calendar?courtId=${court.id}`}>
-                    <Button variant="outline" size="sm" className="h-6 text-[11px] px-2">
-                      Lịch
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Action: Pending Bookings & Fast Check-In Table */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between w-full">
-              <CardTitle>Khách Đã Đặt Sân Sắp Tới & Điểm Danh (Check-in)</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" className="text-xs gap-1.5">
-                  <QrCode className="w-3.5 h-3.5" strokeWidth={1.5} />
-                  Quét Mã Khách
-                </Button>
-              </div>
+                        return (
+                          <div key={slot.hour}>
+                            <div className="mb-1.5 flex items-center justify-between text-xs">
+                              <span className="font-medium text-neutral-700 dark:text-neutral-300">{slot.label}</span>
+                              <span className="font-mono text-neutral-500">{slot.booking_count} lượt</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800">
+                              <div
+                                className="h-2 rounded-full bg-sky-500"
+                                style={{ width: `${(slot.booking_count / maxBookings) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-neutral-50 dark:bg-neutral-800/40 text-neutral-500 text-xs font-semibold border-b border-neutral-200 dark:border-neutral-800">
-                <tr>
-                  <th className="py-3 px-5">Mã đơn</th>
-                  <th className="py-3 px-5">Tên khách & SĐT</th>
-                  <th className="py-3 px-5">Sân thi đấu</th>
-                  <th className="py-3 px-5">Khung giờ</th>
-                  <th className="py-3 px-5">Tiền sân</th>
-                  <th className="py-3 px-5">Trạng thái</th>
-                  <th className="py-3 px-5 text-right">Xác nhận check-in</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                {MOCK_BOOKINGS.map((b) => (
-                  <tr key={b.id} className="hover:bg-neutral-50/50">
-                    <td className="py-3.5 px-5 font-mono text-xs font-bold text-neutral-800 dark:text-neutral-200">
-                      {b.booking_code}
-                    </td>
-                    <td className="py-3.5 px-5">
-                      <div className="font-semibold text-neutral-900 dark:text-white">
-                        {b.customer_name}
-                      </div>
-                      <div className="text-xs font-mono text-neutral-400">
-                        {b.customer_phone}
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-5 text-xs text-neutral-700 dark:text-neutral-300">
-                      {b.court?.name}
-                    </td>
-                    <td className="py-3.5 px-5 font-mono text-xs text-neutral-600 dark:text-neutral-300">
-                      {b.start_time.slice(0, 5)} - {b.end_time.slice(0, 5)}
-                    </td>
-                    <td className="py-3.5 px-5 font-mono text-xs font-medium text-sport-600">
-                      {formatVND(b.total_price)}
-                    </td>
-                    <td className="py-3.5 px-5">
-                      <Badge variant={b.checked_in ? 'neutral' : 'sport'}>
-                        {b.checked_in ? 'Đã vào sân' : 'Chờ vào sân'}
-                      </Badge>
-                    </td>
-                    <td className="py-3.5 px-5 text-right">
-                      {b.checked_in ? (
-                        <span className="text-xs text-neutral-400 flex items-center justify-end gap-1 font-medium">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                          Đã điểm danh
-                        </span>
-                      ) : (
-                        <Button variant="primary" size="sm" className="h-7 text-xs px-3">
-                          Vào sân
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+          </>
+        )}
       </div>
     </div>
   );

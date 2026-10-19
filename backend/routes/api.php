@@ -1,12 +1,18 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DashboardAnalyticsController;
 use App\Http\Controllers\Api\V1\HealthCheckController;
+use App\Http\Controllers\Api\V1\LoyaltyController;
 use App\Http\Controllers\Api\V1\MatchMemberController;
 use App\Http\Controllers\Api\V1\MatchPostController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PaymentController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\ReferralController;
+use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\SportCategoryController;
 use App\Http\Controllers\Api\V1\VoucherController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +44,10 @@ Route::prefix('v1')->group(function () {
     // Public Sport Categories
     Route::get('/sport-categories', [SportCategoryController::class, 'index']);
     Route::get('/sport-categories/{idOrCode}', [SportCategoryController::class, 'show']);
+
+    // Public AI assistant and venue reviews
+    Route::post('/ai/chat', [AiAssistantController::class, 'chat'])->middleware('throttle:10,1');
+    Route::get('/venues/{venueId}/reviews', [ReviewController::class, 'index']);
 
     // =========================================================================
     // PHẦN 4: THANH TOÁN (PAYMENTS & VIETQR)
@@ -104,6 +114,32 @@ Route::prefix('v1')->group(function () {
             Route::post('/avatar', [ProfileController::class, 'updateAvatar']);
         });
 
+        // Reviews and notifications
+        Route::get('/venues/{venueId}/my-reviewable-bookings', [ReviewController::class, 'getReviewableBookings']);
+        Route::post('/reviews', [ReviewController::class, 'store']);
+
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::put('/read-all', [NotificationController::class, 'markAllAsRead']);
+            Route::put('/{id}/read', [NotificationController::class, 'markAsRead'])->whereNumber('id');
+        });
+
+        // Referral and loyalty programs
+        Route::prefix('referral')->group(function () {
+            Route::get('/my-code', [ReferralController::class, 'myCode']);
+            Route::post('/claim', [ReferralController::class, 'claim'])->middleware('throttle:10,1');
+        });
+
+        Route::prefix('loyalty')->group(function () {
+            Route::get('/summary', [LoyaltyController::class, 'summary']);
+            Route::get('/history', [LoyaltyController::class, 'history']);
+            Route::post('/redeem', [LoyaltyController::class, 'redeem'])->middleware('throttle:10,1');
+        });
+
+        Route::middleware('role:owner')->prefix('owner')->group(function () {
+            Route::get('/analytics', [DashboardAnalyticsController::class, 'owner']);
+        });
+
         // =====================================================================
         // PHẦN 4: MATCHMAKING - QUẢN LÝ KÈO & THÀNH VIÊN
         // =====================================================================
@@ -136,6 +172,7 @@ Route::prefix('v1')->group(function () {
 
         // Admin Only Routes
         Route::middleware('role:admin')->prefix('admin')->group(function () {
+            Route::get('/analytics', [DashboardAnalyticsController::class, 'admin']);
             Route::post('/sport-categories', [SportCategoryController::class, 'store']);
             Route::put('/sport-categories/{id}', [SportCategoryController::class, 'update']);
             Route::delete('/sport-categories/{id}', [SportCategoryController::class, 'destroy']);
@@ -152,6 +189,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/users', [AdminUserController::class, 'index']);
             Route::put('/users/{id}/status', [AdminUserController::class, 'updateStatus']);
             Route::put('/users/{id}/role', [AdminUserController::class, 'updateRole']);
+
+            Route::put('/reviews/{id}/status', [ReviewController::class, 'updateStatus']);
         });
     });
 });

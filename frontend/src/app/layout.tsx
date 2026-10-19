@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { FloatingChatbotWidget } from '@/components/ai/FloatingChatbotWidget';
 
 export const metadata: Metadata = {
   title: 'SportZone — Hệ Thống Quản Lý & Đặt Sân Thể Thao Trực Tuyến',
@@ -24,6 +25,7 @@ export default function RootLayout({
             {children}
           </main>
           <Footer />
+          <FloatingChatbotWidget />
         </AuthProvider>
       </body>
     </html>
