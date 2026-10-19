@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { MOCK_VENUES, MOCK_ADDONS, Court, Addon } from '@/lib/mock-data';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -25,7 +26,15 @@ import {
 export default function BookingWizardPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const courtId = parseInt(params.courtId as string, 10);
+
+  // Chưa đăng nhập -> đá về login, xong quay lại đúng sân này
+  useEffect(() => {
+    if (!isAuthLoading && !user) {
+      router.replace(`/auth/login?redirect=${encodeURIComponent(`/booking/${courtId}`)}`);
+    }
+  }, [isAuthLoading, user, router, courtId]);
 
   // Find court across venues
   let selectedCourt: Court | undefined;
@@ -86,6 +95,15 @@ export default function BookingWizardPage() {
   const handleCompleteBooking = () => {
     setIsSuccess(true);
   };
+
+  // Đang kiểm tra auth hoặc sắp redirect -> hiện loading, tránh nháy nội dung
+  if (isAuthLoading || !user) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <p className="text-xs text-neutral-500">Đang kiểm tra đăng nhập...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">

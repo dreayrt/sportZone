@@ -75,4 +75,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
         });
+
+        // Middleware auth:sanctum với request không có header Accept: application/json
+        // sẽ gọi route('login') để redirect (route này không tồn tại ở backend API).
+        $exceptions->render(function (\Symfony\Component\Routing\Exception\RouteNotFoundException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chưa xác thực hoặc phiên đăng nhập đã hết hạn.',
+                    'data' => null,
+                    'errors' => null,
+                ], 401);
+            }
+        });
     })->create();

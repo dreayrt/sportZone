@@ -68,6 +68,16 @@ export const api = {
       apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
     me: () => apiRequest('/auth/me'),
     logout: () => apiRequest('/auth/logout', { method: 'POST' }),
+    forgotPassword: (body: { email: string }) =>
+      apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
+    resetPassword: (body: { email: string; token: string; password: string; password_confirmation: string }) =>
+      apiRequest('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
+    getSocialRedirectUrl: (provider: 'google' | 'facebook') =>
+      apiRequest<{ url: string }>(`/auth/${provider}/redirect`),
+    linkSocial: (provider: 'google' | 'facebook', redirect?: string) =>
+      apiRequest<{ url: string }>(`/social/${provider}/link${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`),
+    unlinkSocial: (provider: 'google' | 'facebook') =>
+      apiRequest(`/social/${provider}/unlink`, { method: 'DELETE' }),
   },
 
   sportCategories: {
@@ -79,5 +89,48 @@ export const api = {
     get: () => apiRequest('/profile'),
     update: (body: any) => apiRequest('/profile', { method: 'PUT', body: JSON.stringify(body) }),
     changePassword: (body: any) => apiRequest('/profile/password', { method: 'PUT', body: JSON.stringify(body) }),
+    uploadAvatar: (file: File) => {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const token = getStoredToken();
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const url = `${API_BASE_URL}/profile/avatar`;
+      return fetch(url, { method: 'POST', headers, body: formData })
+        .then(async (res): Promise<ApiResponse> => {
+          try {
+            return await res.json();
+          } catch {
+            return { success: false, message: 'Upload thất bại.', data: null, errors: null };
+          }
+        })
+        .catch((error: any): ApiResponse => ({
+          success: false,
+          message: error?.message || 'Không thể kết nối đến máy chủ.',
+          data: null,
+          errors: error,
+        }));
+    },
+  },
+
+  admin: {
+    users: {
+      list: (params?: { search?: string; role?: string; status?: string; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.role) query.set('role', params.role);
+        if (params?.status) query.set('status', params.status);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.per_page) query.set('per_page', String(params.per_page));
+        const qs = query.toString();
+        return apiRequest(`/admin/users${qs ? `?${qs}` : ''}`);
+      },
+      updateStatus: (id: number, status: 'active' | 'blocked') =>
+        apiRequest(`/admin/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+      updateRole: (id: number, role: string) =>
+        apiRequest(`/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+    },
   }
 };

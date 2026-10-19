@@ -32,6 +32,18 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = [
+        'has_password',
+    ];
+
+    /**
+     * User đăng nhập OAuth có thể chưa đặt mật khẩu.
+     */
+    public function getHasPasswordAttribute(): bool
+    {
+        return !empty($this->password_hash);
+    }
+
     protected function casts(): array
     {
         return [
