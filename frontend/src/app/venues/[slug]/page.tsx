@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { MOCK_VENUES } from '@/lib/mock-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -22,9 +22,20 @@ import {
 
 export default function VenueDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { user, isLoading } = useAuth();
   const slug = params.slug as string;
 
   const venue = MOCK_VENUES.find((v) => v.slug === slug) || MOCK_VENUES[0];
+
+  const handleBookCourt = (courtId: number) => {
+    const target = `/booking/${courtId}`;
+    if (!isLoading && !user) {
+      router.push(`/auth/login?redirect=${encodeURIComponent(target)}`);
+      return;
+    }
+    router.push(target);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -104,12 +115,15 @@ export default function VenueDetailPage() {
                     </div>
                   </div>
 
-                  <Link href={`/booking/${court.id}`}>
-                    <Button variant="primary" size="sm" className="gap-1 text-xs">
-                      Đặt Sân Này
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    onClick={() => handleBookCourt(court.id)}
+                  >
+                    Đặt Sân Này
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </Card>
             ))}

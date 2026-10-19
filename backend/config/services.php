@@ -34,5 +34,24 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/google/callback'),
+    ],
+
+    'facebook' => [
+        'client_id' => env('FACEBOOK_CLIENT_ID'),
+        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
+        'redirect' => env('FACEBOOK_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/facebook/callback'),
+    ],
+
+    'sepay' => [
+        'webhook_secret' => env('SEPAY_WEBHOOK_SECRET'),
+        'bank_name' => env('SEPAY_BANK_NAME', 'MBBank'),
+        'account_no' => env('SEPAY_ACCOUNT_NO'),
+        'account_name' => env('SEPAY_ACCOUNT_NAME', 'SPORTZONE'),
+        'code_prefix' => env('SEPAY_CODE_PREFIX', 'SZ'),
+    ],
 
 ];

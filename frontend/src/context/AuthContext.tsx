@@ -3,14 +3,25 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api, getStoredToken, setStoredToken, removeStoredToken } from '@/lib/api';
 
+export interface LinkedSocialAccount {
+  id: number;
+  provider: 'google' | 'facebook';
+  provider_id: string;
+  provider_email: string | null;
+  provider_name: string | null;
+  provider_avatar: string | null;
+}
+
 export interface AuthUser {
   id: number;
   full_name: string;
   email: string | null;
-  phone: string;
+  phone: string | null;
   role: 'customer' | 'owner' | 'admin';
   status: 'active' | 'blocked';
   avatar?: string | null;
+  has_password?: boolean;
+  socialAccounts?: LinkedSocialAccount[];
   points?: {
     total_points: number;
     lifetime_points: number;
@@ -86,8 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Continue cleanup
     } finally {
+      // Xóa session local trước, rồi về trang chủ
       removeStoredToken();
       setUser(null);
+      window.location.href = '/';
     }
   };
 
