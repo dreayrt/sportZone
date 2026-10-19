@@ -414,5 +414,35 @@ export const api = {
       apiRequest('/reviews', { method: 'POST', body: JSON.stringify(body) }),
     updateStatus: (reviewId: number, status: 'visible' | 'hidden') =>
       apiRequest(`/admin/reviews/${reviewId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+  },
+
+  bookings: {
+    getAll: (params?: Record<string, string | number>) => {
+      const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+      return apiRequest(`/bookings${qs}`);
+    },
+    getOne: (idOrCode: string | number) => apiRequest(`/bookings/${idOrCode}`),
+    create: (body: any) =>
+      apiRequest('/bookings', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id: number, body: any) =>
+      apiRequest(`/bookings/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+    cancel: (id: number, reason: string) =>
+      apiRequest(`/bookings/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+    checkIn: (id: number) =>
+      apiRequest(`/bookings/${id}/check-in`, { method: 'POST' }),
+    addAddon: (id: number, body: { addon_id: number; quantity: number }) =>
+      apiRequest(`/bookings/${id}/addons`, { method: 'POST', body: JSON.stringify(body) }),
+    removeAddon: (id: number, addonId: number) =>
+      apiRequest(`/bookings/${id}/addons/${addonId}`, { method: 'DELETE' }),
+    cancelUnpaid: (minutes = 30) =>
+      apiRequest(`/owner/bookings/cancel-unpaid?minutes=${minutes}`, { method: 'POST' }),
+    getCourtSlots: (courtId: number, date?: string) => {
+      const qs = date ? `?date=${date}` : '';
+      return apiRequest(`/courts/${courtId}/slots${qs}`);
+    },
+    getTimeline: (params?: { venue_id?: number; date?: string }) => {
+      const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+      return apiRequest(`/owner/calendar${qs}`);
+    },
   }
 };
