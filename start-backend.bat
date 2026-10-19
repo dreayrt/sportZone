@@ -1,6 +1,10 @@
 @echo off
 title SportZone Backend API Server
-set PATH=C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64;C:\laragon\bin\composer;C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin;%PATH%
+if exist "D:\HocTap\laragon\bin" (
+    set PATH=D:\HocTap\laragon\bin\php\php-8.3.30-Win32-vs16-x64;D:\HocTap\laragon\bin\composer;D:\HocTap\laragon\bin\mysql\mysql-8.4.3-winx64\bin;%PATH%
+) else (
+    set PATH=C:\laragon\bin\php\php-8.3.33-Win32-vs16-x64;C:\laragon\bin\composer;C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin;%PATH%
+)
 cd /d "%~dp0backend"
 echo ========================================================
 echo   SPORTZONE BACKEND API (Laravel 11)
