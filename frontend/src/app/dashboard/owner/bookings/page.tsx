@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { MOCK_BOOKINGS, MOCK_VENUES, Booking } from '@/lib/mock-data';
 import { formatVND, formatDate } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { BookingQrScanner } from '@/components/bookings/BookingQrScanner';
 import {
   Plus,
   Check,
@@ -28,6 +29,7 @@ export default function OwnerBookingsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   // Counter Modal State
   const venue = MOCK_VENUES[0];
@@ -62,7 +64,7 @@ export default function OwnerBookingsPage() {
   }, []);
 
   // Action Check-in calling Backend API
-  const handleCheckIn = async (id: number) => {
+  const handleCheckIn = useCallback(async (id: number) => {
     try {
       const res = await api.bookings.checkIn(id);
       if (res.success) {
@@ -74,13 +76,40 @@ export default function OwnerBookingsPage() {
         alert(res.message || 'Lỗi khi điểm danh.');
       }
     } catch {
-      // Fallback
-      setBookings(prev =>
-        prev.map(b => b.id === id ? { ...b, checked_in: true, checked_in_at: new Date().toISOString() } : b)
-      );
-      alert('Điểm danh khách vào sân thành công (Demo Mode)!');
+      alert('Không kết nối được máy chủ. Chưa ghi nhận check-in; hãy kiểm tra backend rồi thử lại.');
     }
-  };
+  }, []);
+
+  const handleCheckInByCode = useCallback(async (rawCode: string) => {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) return;
+
+    try {
+      const response = await api.bookings.getOne(code);
+      const booking = response.data as Booking | undefined;
+      if (!response.success || !booking) {
+        alert(response.message || `Không tìm thấy đơn ${code}.`);
+        return;
+      }
+      if (booking.payment_status !== 'paid') {
+        alert(`Đơn ${booking.booking_code} chưa thanh toán đủ, chưa thể check-in.`);
+        return;
+      }
+      if (booking.checked_in) {
+        alert(`Đơn ${booking.booking_code} đã được check-in trước đó.`);
+        return;
+      }
+
+      await handleCheckIn(booking.id);
+    } catch {
+      alert('Không tra được đơn. Kiểm tra bạn đang đăng nhập đúng tài khoản chủ sân của cơ sở này.');
+    }
+  }, [handleCheckIn]);
+
+  const handleScannerResult = useCallback((code: string) => {
+    setIsScannerOpen(false);
+    void handleCheckInByCode(code);
+  }, [handleCheckInByCode]);
 
   // Action Export CSV
   const handleExportCSV = () => {
@@ -143,6 +172,10 @@ export default function OwnerBookingsPage() {
         description="Theo dõi toàn bộ đơn đặt từ Website và Tại quầy, xác nhận điểm danh khách vào sân và xuất báo cáo."
         actions={
           <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setIsScannerOpen(true)} className="gap-1.5 text-xs">
+              <QrCode className="w-3.5 h-3.5" />
+              Quét QR Check-in
+            </Button>
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5 text-xs">
               <Download className="w-3.5 h-3.5" />
               Xuất Báo Cáo CSV
@@ -435,6 +468,9 @@ export default function OwnerBookingsPage() {
           </div>
         )}
       </div>
+      {isScannerOpen && (
+        <BookingQrScanner onScan={handleScannerResult} onClose={() => setIsScannerOpen(false)} />
+      )}
     </div>
   );
 }

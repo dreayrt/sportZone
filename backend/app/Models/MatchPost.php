@@ -87,7 +87,7 @@ class MatchPost extends Model
         $acceptedCount = $this->acceptedMembers()->count();
         $totalMembers = 1 + $acceptedCount; // 1 người tạo + số người đã duyệt
 
-        $maxCapacity = 1 + (int)$this->required_members;
+        $maxCapacity = 1 + (int) $this->required_members;
 
         $newStatus = $this->status;
         if ($this->status === 'open' && $totalMembers >= $maxCapacity) {
@@ -107,32 +107,34 @@ class MatchPost extends Model
      */
     public function scopeFilter($query, array $filters)
     {
-        if (!empty($filters['sport_category_id'])) {
+        if (! empty($filters['sport_category_id'])) {
             $query->where('sport_category_id', $filters['sport_category_id']);
         }
 
-        if (!empty($filters['skill_level']) && $filters['skill_level'] !== 'all') {
+        if (! empty($filters['skill_level']) && $filters['skill_level'] !== 'all') {
             $query->where(function ($q) use ($filters) {
                 $q->where('skill_level', $filters['skill_level'])
                     ->orWhere('skill_level', 'all');
             });
         }
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['date'])) {
+        if (! empty($filters['date'])) {
             $query->whereDate('match_date', $filters['date']);
         }
 
-        if (!empty($filters['city'])) {
-            $query->whereHas('venue', function ($q) use ($filters) {
-                $q->where('city', 'like', "%{$filters['city']}%");
+        if (! empty($filters['city'])) {
+            $query->where(function ($cityQuery) use ($filters) {
+                $cityQuery->whereHas('venue', function ($venueQuery) use ($filters) {
+                    $venueQuery->where('city', 'like', "%{$filters['city']}%");
+                })->orWhere('location_note', 'like', "%{$filters['city']}%");
             });
         }
 
-        if (!empty($filters['keyword'])) {
+        if (! empty($filters['keyword'])) {
             $kw = $filters['keyword'];
             $query->where(function ($q) use ($kw) {
                 $q->where('title', 'like', "%{$kw}%")

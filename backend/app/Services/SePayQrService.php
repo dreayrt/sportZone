@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-class VietQrService
+class SePayQrService
 {
     /**
-     * Sinh URL ảnh mã VietQR thanh toán
+     * Sinh URL QR chuyển khoản do SePay cung cấp.
      */
     public function generateQrUrl(
         int $amount,
@@ -20,17 +20,11 @@ class VietQrService
 
         // Mã hóa thông tin URL
         $encodedDescription = urlencode(trim($description));
-        $encodedAccName = urlencode(trim($accName));
-
-        // 1. URL SePay Quick QR (Rất nhanh và tối ưu)
+        // Use SePay as the only QR provider for this course project.
         $sepayQrUrl = "https://qr.sepay.vn/img?acc={$accNo}&bank={$bankName}&amount={$amount}&des={$encodedDescription}";
-
-        // 2. URL VietQR chuẩn Napas (dự phòng)
-        $vietqrUrl = "https://api.vietqr.io/image/{$bankName}-{$accNo}-compact2.png?amount={$amount}&addInfo={$encodedDescription}&accountName={$encodedAccName}";
 
         return [
             'qr_image_url' => $sepayQrUrl,
-            'fallback_qr_url' => $vietqrUrl,
             'bank_name' => $bankName,
             'account_no' => $accNo,
             'account_name' => $accName,
@@ -46,14 +40,14 @@ class VietQrService
     public function makeTransferDescription(string|int $identifier): string
     {
         $prefix = config('services.sepay.code_prefix', 'SZ');
-        $cleanId = preg_replace('/[^A-Za-z0-9]/', '', (string)$identifier);
+        $cleanId = preg_replace('/[^A-Za-z0-9]/', '', (string) $identifier);
 
         // Nếu chuỗi đã có sẵn tiền tố SZ hoặc SPZ thì dùng luôn
         if (str_starts_with(strtoupper($cleanId), strtoupper($prefix))) {
             return strtoupper($cleanId);
         }
 
-        return strtoupper($prefix . $cleanId);
+        return strtoupper($prefix.$cleanId);
     }
 
     /**
@@ -68,12 +62,12 @@ class VietQrService
 
         $prefix = config('services.sepay.code_prefix', 'SZ');
 
-        // 1. Tìm theo định dạng: SZ-12345 hoặc SPZ-12345 hoặc SZ12345
+        // Match both legacy numeric codes and current random alphanumeric booking codes.
         $patterns = [
-            '/\b(' . preg_quote($prefix, '/') . '[-_]?\d+)\b/i',
-            '/\b(SPZ[-_]?\d+)\b/i',
-            '/\b(SZ[-_]?\d+)\b/i',
-            '/\b(SPORTZONE[-_]?\d+)\b/i',
+            '/\b('.preg_quote($prefix, '/').'[-_]?[A-Z0-9]{1,29})\b/i',
+            '/\b(SPZ[-_]?[A-Z0-9]{1,29})\b/i',
+            '/\b(SZ[-_]?[A-Z0-9]{1,29})\b/i',
+            '/\b(SPORTZONE[-_]?[A-Z0-9]{1,29})\b/i',
         ];
 
         foreach ($patterns as $pattern) {

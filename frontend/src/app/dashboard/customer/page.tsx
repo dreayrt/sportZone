@@ -133,7 +133,7 @@ export default function CustomerDashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge variant="sport">Đã thanh toán VietQR</Badge>
+                <Badge variant="sport">Đã thanh toán qua SePay</Badge>
                 <span className="text-xs font-mono text-neutral-400">Mã đơn: {upcomingBooking.booking_code}</span>
               </div>
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">

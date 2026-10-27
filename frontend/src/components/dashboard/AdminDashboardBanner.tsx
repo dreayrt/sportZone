@@ -81,7 +81,7 @@ export function AdminDashboardBanner({
             </h2>
 
             <p className="text-xs sm:text-sm text-neutral-300 leading-relaxed max-w-xl">
-              Cơ chế phân bổ thời gian thực và xác thực giao dịch VietQR/MoMo đang xử lý lưu lượng đặt sân ổn định trên toàn quốc. Đảm bảo quyết toán minh bạch cho toàn bộ chủ cơ sở đối tác.
+              Luồng webhook SePay cập nhật giao dịch đặt sân; các giao dịch và voucher được lưu theo từng đơn để nhóm theo dõi trong đồ án.
             </p>
           </div>
 

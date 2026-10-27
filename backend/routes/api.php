@@ -3,8 +3,8 @@
 use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\DashboardAnalyticsController;
 use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\DashboardAnalyticsController;
 use App\Http\Controllers\Api\V1\HealthCheckController;
 use App\Http\Controllers\Api\V1\LoyaltyController;
 use App\Http\Controllers\Api\V1\MatchMemberController;
@@ -51,18 +51,12 @@ Route::prefix('v1')->group(function () {
     Route::get('/venues/{venueId}/reviews', [ReviewController::class, 'index']);
 
     // =========================================================================
-    // PHẦN 4: THANH TOÁN (PAYMENTS & VIETQR)
+    // PHẦN 4: THANH TOÁN SEPAY
     // =========================================================================
     Route::prefix('payments')->group(function () {
-        // 1. Sinh mã VietQR động cho đơn đặt sân (Public hoặc Auth)
-        Route::post('/generate-qr', [PaymentController::class, 'generatePaymentQR']);
-
-        // 2. Webhook SePay (Bảo mật HMAC-SHA256)
+        // SePay callback remains public and is protected by request signature.
         Route::post('/sepay-webhook', [PaymentController::class, 'handleSepayWebhook'])
             ->middleware('sepay.verify');
-
-        // 3. Polling kiểm tra trạng thái thanh toán (Theo booking_id hoặc booking_code)
-        Route::get('/status/{idOrCode}', [PaymentController::class, 'checkPaymentStatus']);
     });
 
     // Alias hỗ trợ SePay gọi qua /api/v1/hooks/sepay-payment
@@ -100,7 +94,6 @@ Route::prefix('v1')->group(function () {
 
     // Đặt sân công khai (hỗ trợ cả khách vãng lai lẫn user đã đăng nhập)
     Route::post('/bookings', [BookingController::class, 'store']);
-    Route::get('/bookings/lookup/{idOrCode}', [BookingController::class, 'show']);
 
     // Protected Routes (Yêu cầu đăng nhập Sanctum token)
     Route::middleware(['auth:sanctum', 'check.status'])->group(function () {
@@ -123,6 +116,10 @@ Route::prefix('v1')->group(function () {
             Route::put('/password', [ProfileController::class, 'changePassword']);
             Route::post('/avatar', [ProfileController::class, 'updateAvatar']);
         });
+
+        // Customer payment endpoints require an authenticated account.
+        Route::post('/payments/generate-qr', [PaymentController::class, 'generatePaymentQR']);
+        Route::get('/payments/status/{bookingCode}', [PaymentController::class, 'checkPaymentStatus']);
 
         // Reviews and notifications
         Route::get('/venues/{venueId}/my-reviewable-bookings', [ReviewController::class, 'getReviewableBookings']);

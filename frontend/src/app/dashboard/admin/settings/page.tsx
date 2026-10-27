@@ -19,7 +19,7 @@ export default function AdminSettingsPage() {
     <div>
       <DashboardHeader
         title="Cấu Hình Tham Số Hệ Thống"
-        description="Quản lý tài khoản ngân hàng nhận thanh toán VietQR, tỷ lệ tích điểm và hotline hỗ trợ."
+        description="Quản lý tài khoản nhận tiền qua SePay, tỷ lệ tích điểm và hotline hỗ trợ."
       />
 
       <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -31,12 +31,12 @@ export default function AdminSettingsPage() {
         )}
 
         <form onSubmit={handleSave} className="space-y-6">
-          {/* VietQR Bank Account Settings */}
+          {/* SePay bank account settings */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <CreditCard className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-                Cấu Hình Thanh Toán VietQR Tự Động
+                Cấu Hình Nhận Thanh Toán Qua SePay
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">

@@ -18,14 +18,14 @@ class MatchPostController extends BaseController
     {
         $query = MatchPost::query()
             ->with([
-                'creator:id,full_name,phone,avatar',
+                'creator:id,full_name,avatar',
                 'sportCategory:id,code,name,banner_image',
                 'venue:id,name,address,district,city',
                 'court:id,name',
             ]);
 
         // Mặc định chỉ lấy các kèo sắp diễn ra và trạng thái open/full (trừ khi có filter cụ thể)
-        if (!$request->has('status')) {
+        if (! $request->has('status')) {
             $query->whereIn('status', ['open', 'full'])
                 ->whereDate('match_date', '>=', now()->toDateString());
         }
@@ -53,14 +53,14 @@ class MatchPostController extends BaseController
     public function show(Request $request, int $id): JsonResponse
     {
         $match = MatchPost::with([
-            'creator:id,full_name,phone,avatar',
+            'creator:id,full_name,avatar',
             'sportCategory:id,code,name,banner_image',
             'venue:id,name,address,district,city,latitude,longitude',
             'court:id,name,surface_type',
             'acceptedMembers.user:id,full_name,avatar',
         ])->find($id);
 
-        if (!$match) {
+        if (! $match) {
             return $this->notFound('Không tìm thấy bài đăng tìm đối yêu cầu.');
         }
 
@@ -71,7 +71,7 @@ class MatchPostController extends BaseController
 
         if ($currentUser) {
             $isCreator = ($currentUser->id === $match->user_id);
-            if (!$isCreator) {
+            if (! $isCreator) {
                 $myApplication = MatchMember::where('match_post_id', $match->id)
                     ->where('user_id', $currentUser->id)
                     ->first();
@@ -151,7 +151,7 @@ class MatchPostController extends BaseController
     {
         $match = MatchPost::find($id);
 
-        if (!$match) {
+        if (! $match) {
             return $this->notFound('Không tìm thấy bài đăng cần cập nhật.');
         }
 
@@ -195,7 +195,7 @@ class MatchPostController extends BaseController
     {
         $match = MatchPost::find($id);
 
-        if (!$match) {
+        if (! $match) {
             return $this->notFound('Không tìm thấy bài đăng cần hủy.');
         }
 
@@ -236,7 +236,7 @@ class MatchPostController extends BaseController
 
         $memberships = MatchMember::where('user_id', $userId)
             ->with([
-                'matchPost.creator:id,full_name,phone,avatar',
+                'matchPost.creator:id,full_name,avatar',
                 'matchPost.sportCategory',
                 'matchPost.venue',
             ])

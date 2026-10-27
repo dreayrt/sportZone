@@ -28,7 +28,7 @@ class BookingService
             ->whereNotIn('status', ['cancelled'])
             ->where(function ($q) use ($startTime, $endTime) {
                 $q->where('start_time', '<', $endTime)
-                  ->where('end_time', '>', $startTime);
+                    ->where('end_time', '>', $startTime);
             });
 
         if ($excludeBookingId) {
@@ -48,8 +48,8 @@ class BookingService
         array $addons = [],
         ?string $voucherCode = null
     ): array {
-        $start = Carbon::createFromFormat('H:i:s', strlen($startTime) === 5 ? $startTime . ':00' : $startTime);
-        $end = Carbon::createFromFormat('H:i:s', strlen($endTime) === 5 ? $endTime . ':00' : $endTime);
+        $start = Carbon::createFromFormat('H:i:s', strlen($startTime) === 5 ? $startTime.':00' : $startTime);
+        $end = Carbon::createFromFormat('H:i:s', strlen($endTime) === 5 ? $endTime.':00' : $endTime);
 
         if ($end->lte($start)) {
             throw ValidationException::withMessages([
@@ -68,8 +68,8 @@ class BookingService
         $peakStartStr = $court->peak_start ?? '17:00:00';
         $peakEndStr = $court->peak_end ?? '21:00:00';
 
-        $peakStart = Carbon::createFromFormat('H:i:s', strlen($peakStartStr) === 5 ? $peakStartStr . ':00' : $peakStartStr);
-        $peakEnd = Carbon::createFromFormat('H:i:s', strlen($peakEndStr) === 5 ? $peakEndStr . ':00' : $peakEndStr);
+        $peakStart = Carbon::createFromFormat('H:i:s', strlen($peakStartStr) === 5 ? $peakStartStr.':00' : $peakStartStr);
+        $peakEnd = Carbon::createFromFormat('H:i:s', strlen($peakEndStr) === 5 ? $peakEndStr.':00' : $peakEndStr);
 
         $overlapPeakMinutes = 0;
         if ($end->gt($peakStart) && $start->lt($peakEnd)) {
@@ -89,7 +89,7 @@ class BookingService
         $addonsFee = 0;
         $addonsDetails = [];
 
-        if (!empty($addons)) {
+        if (! empty($addons)) {
             $addonIds = array_column($addons, 'addon_id');
             $addonModels = Addon::whereIn('id', $addonIds)->where('status', 'active')->get()->keyBy('id');
 
@@ -118,17 +118,23 @@ class BookingService
         $discountAmount = 0;
         $appliedVoucher = null;
 
-        if (!empty($voucherCode)) {
+        if (! empty($voucherCode)) {
             $voucher = Voucher::where('code', strtoupper(trim($voucherCode)))->first();
-            if ($voucher && $voucher->isValid($subtotalOrder)) {
-                $appliedVoucher = $voucher;
-                if ($voucher->discount_type === 'percent') {
-                    $calcDiscount = (int) round($subtotalOrder * ($voucher->discount_value / 100));
-                    $discountAmount = $voucher->max_discount ? min($calcDiscount, $voucher->max_discount) : $calcDiscount;
-                } else {
-                    $discountAmount = min($voucher->discount_value, $subtotalOrder);
-                }
+            if (! $voucher) {
+                throw ValidationException::withMessages([
+                    'voucher_code' => 'Mã giảm giá không tồn tại hoặc không còn khả dụng.',
+                ]);
             }
+
+            $validation = $voucher->validateForOrder($subtotalOrder);
+            if (! $validation['valid']) {
+                throw ValidationException::withMessages([
+                    'voucher_code' => $validation['message'],
+                ]);
+            }
+
+            $appliedVoucher = $voucher;
+            $discountAmount = $validation['discount'];
         }
 
         $totalPrice = max(0, $subtotalOrder - $discountAmount);
@@ -153,7 +159,7 @@ class BookingService
     public function generateUniqueBookingCode(): string
     {
         do {
-            $code = 'SZ-' . strtoupper(Str::random(5));
+            $code = 'SZ-'.strtoupper(Str::random(5));
         } while (Booking::where('booking_code', $code)->exists());
 
         return $code;
@@ -174,8 +180,8 @@ class BookingService
             }
 
             $bookingDate = $payload['booking_date'];
-            $startTime = strlen($payload['start_time']) === 5 ? $payload['start_time'] . ':00' : $payload['start_time'];
-            $endTime = strlen($payload['end_time']) === 5 ? $payload['end_time'] . ':00' : $payload['end_time'];
+            $startTime = strlen($payload['start_time']) === 5 ? $payload['start_time'].':00' : $payload['start_time'];
+            $endTime = strlen($payload['end_time']) === 5 ? $payload['end_time'].':00' : $payload['end_time'];
 
             // Khóa dòng pessimistic lock để chống race condition khi 2 người cùng đặt 1 lúc
             $conflict = Booking::where('court_id', $court->id)
@@ -183,7 +189,7 @@ class BookingService
                 ->whereNotIn('status', ['cancelled'])
                 ->where(function ($q) use ($startTime, $endTime) {
                     $q->where('start_time', '<', $endTime)
-                      ->where('end_time', '>', $startTime);
+                        ->where('end_time', '>', $startTime);
                 })
                 ->lockForUpdate()
                 ->exists();
@@ -192,6 +198,13 @@ class BookingService
                 throw ValidationException::withMessages([
                     'slot' => 'Khung giờ này vừa có người đặt hoặc đang bị trùng lịch. Vui lòng chọn khung giờ khác.',
                 ]);
+            }
+
+            $voucherCode = strtoupper(trim((string) ($payload['voucher_code'] ?? '')));
+            if ($voucherCode !== '') {
+                Voucher::where('code', $voucherCode)
+                    ->lockForUpdate()
+                    ->first();
             }
 
             // Tính toán chi phí
@@ -273,6 +286,10 @@ class BookingService
                 throw new Exception('Không thể điểm danh đơn đặt đã bị hủy.');
             }
 
+            if ($booking->payment_status !== 'paid') {
+                throw new Exception('Chỉ đơn đã thanh toán đủ mới được check-in.');
+            }
+
             if ($booking->checked_in) {
                 return $booking; // Đã check-in rồi
             }
@@ -343,7 +360,7 @@ class BookingService
 
             // 1. Cập nhật trạng thái nếu có
             if (isset($payload['status']) && $payload['status'] !== $booking->status) {
-                if (!$isOwnerOrAdmin) {
+                if (! $isOwnerOrAdmin) {
                     throw ValidationException::withMessages([
                         'status' => 'Chỉ chủ sân hoặc quản trị viên mới có quyền cập nhật trạng thái đơn.',
                     ]);
@@ -369,15 +386,33 @@ class BookingService
 
             // 2. Cập nhật trạng thái thanh toán
             if (isset($payload['payment_status']) && $payload['payment_status'] !== $booking->payment_status) {
-                if (!$isOwnerOrAdmin) {
+                if (! $isOwnerOrAdmin) {
                     throw ValidationException::withMessages([
                         'payment_status' => 'Chỉ chủ sân hoặc quản trị viên mới có quyền cập nhật trạng thái thanh toán.',
                     ]);
                 }
+
+                $usesSepay = $booking->payment_method === 'vietqr'
+                    || ($payload['payment_method'] ?? null) === 'vietqr';
+                if ($usesSepay && in_array($payload['payment_status'], ['partial', 'paid', 'refunded'], true)) {
+                    throw ValidationException::withMessages([
+                        'payment_status' => 'Thanh toán SePay chỉ được cập nhật từ webhook đã xác thực.',
+                    ]);
+                }
+
                 $booking->payment_status = $payload['payment_status'];
             }
 
             if (isset($payload['payment_method']) && $isOwnerOrAdmin) {
+                if (
+                    ($booking->payment_method === 'vietqr' && $payload['payment_method'] !== 'vietqr')
+                    || ($payload['payment_method'] === 'vietqr' && $booking->payment_status !== 'unpaid')
+                ) {
+                    throw ValidationException::withMessages([
+                        'payment_method' => 'Không thể thay đổi phương thức của giao dịch SePay đã bắt đầu hoặc đã thanh toán.',
+                    ]);
+                }
+
                 $booking->payment_method = $payload['payment_method'];
             }
 
@@ -524,7 +559,7 @@ class BookingService
     {
         $threshold = Carbon::now()->subMinutes($expireMinutes);
 
-        $unpaidBookings = Booking::where('payment_status', 'unpaid')
+        $unpaidBookings = Booking::whereIn('payment_status', ['unpaid', 'partial'])
             ->whereNotIn('status', ['cancelled', 'completed'])
             ->where('created_at', '<=', $threshold)
             ->get();
@@ -569,8 +604,8 @@ class BookingService
         $slots = [];
         $slotStepMinutes = 90; // Chuẩn các ca đấu 1.5 giờ (90 phút)
 
-        $currentTime = Carbon::createFromFormat('Y-m-d H:i:s', "{$date} " . sprintf('%02d:00:00', $openHour));
-        $endLimit = Carbon::createFromFormat('Y-m-d H:i:s', "{$date} " . sprintf('%02d:00:00', $closeHour));
+        $currentTime = Carbon::createFromFormat('Y-m-d H:i:s', "{$date} ".sprintf('%02d:00:00', $openHour));
+        $endLimit = Carbon::createFromFormat('Y-m-d H:i:s', "{$date} ".sprintf('%02d:00:00', $closeHour));
 
         while ($currentTime->copy()->addMinutes($slotStepMinutes)->lte($endLimit)) {
             $slotStart = $currentTime->copy();
@@ -584,7 +619,8 @@ class BookingService
             $matchedBooking = $existingBookings->first(function ($b) use ($startStr, $endStr) {
                 $bStart = substr($b->start_time, 0, 5);
                 $bEnd = substr($b->end_time, 0, 5);
-                return ($bStart < $endStr && $bEnd > $startStr);
+
+                return $bStart < $endStr && $bEnd > $startStr;
             });
 
             // Kiểm tra có phải peak không
@@ -599,7 +635,7 @@ class BookingService
                 'rate' => $rate,
                 'is_booked' => $matchedBooking !== null,
                 'booking_code' => $matchedBooking?->booking_code,
-                'customer_name' => $matchedBooking ? ($matchedBooking->customer_name . ' (' . substr($matchedBooking->customer_phone, 0, 4) . '***)') : null,
+                'customer_name' => $matchedBooking ? ($matchedBooking->customer_name.' ('.substr($matchedBooking->customer_phone, 0, 4).'***)') : null,
                 'booking_status' => $matchedBooking?->status,
                 'checked_in' => $matchedBooking?->checked_in ?? false,
             ];
@@ -624,7 +660,7 @@ class BookingService
         $timeRows = [
             '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
             '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
-            '18:00', '19:00', '20:00', '21:00', '22:00'
+            '18:00', '19:00', '20:00', '21:00', '22:00',
         ];
 
         $matrix = [];
@@ -635,11 +671,14 @@ class BookingService
             $courtsData = [];
             foreach ($courts as $court) {
                 $matchedBooking = $bookings->first(function ($b) use ($court, $slotHour) {
-                    if ($b->court_id !== $court->id) return false;
+                    if ($b->court_id !== $court->id) {
+                        return false;
+                    }
                     $bStartHour = (int) explode(':', $b->start_time)[0];
                     $bEndHour = (int) explode(':', $b->end_time)[0];
                     $currentH = (int) explode(':', $slotHour)[0];
-                    return ($currentH >= $bStartHour && $currentH < $bEndHour);
+
+                    return $currentH >= $bStartHour && $currentH < $bEndHour;
                 });
 
                 $courtsData[$court->id] = [

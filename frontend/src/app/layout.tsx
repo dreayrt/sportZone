@@ -7,7 +7,7 @@ import { FloatingChatbotWidget } from '@/components/ai/FloatingChatbotWidget';
 
 export const metadata: Metadata = {
   title: 'SportZone — Hệ Thống Quản Lý & Đặt Sân Thể Thao Trực Tuyến',
-  description: 'Nền tảng thương mại điện tử đặt sân thể thao chuyên nghiệp hàng đầu. Tìm kiếm sân bóng đá, cầu lông, pickleball, tennis nhanh chóng và thanh toán VietQR tức thì.',
+  description: 'Nền tảng đặt sân thể thao và ghép kèo. Tìm sân bóng đá, cầu lông, pickleball, tennis và thanh toán qua SePay.',
   keywords: ['đặt sân thể thao', 'sân bóng đá', 'sân cầu lông', 'sân pickleball', 'thuê sân tennis', 'SportZone'],
 };
 

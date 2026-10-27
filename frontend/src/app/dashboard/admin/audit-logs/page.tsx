@@ -9,7 +9,7 @@ import { History, Shield } from 'lucide-react';
 export default function AdminAuditLogsPage() {
   const logs = [
     { id: 101, action: 'BOOKING_CHECKIN', entity: 'Booking #SZ-66021', user: 'Chủ sân Chấn Hưng', ip: '127.0.0.1', time: '17/09/2026 07:05' },
-    { id: 102, action: 'PAYMENT_RECEIVED', entity: 'Payment #VQR77812 (500.000đ)', user: 'Hệ thống VietQR Webhook', ip: '14.161.22.4', time: '17/09/2026 06:45' },
+    { id: 102, action: 'PAYMENT_RECEIVED', entity: 'Payment #SZ-77812 (500.000đ)', user: 'SePay Webhook', ip: '127.0.0.1', time: '17/09/2026 06:45' },
     { id: 103, action: 'USER_REGISTERED', entity: 'User #4 (Nguyễn Minh Anh)', user: 'Guest', ip: '113.190.12.8', time: '17/09/2026 06:30' },
     { id: 104, action: 'SETTINGS_UPDATED', entity: 'System Setting: loyalty_points', user: 'Quản trị SportZone', ip: '127.0.0.1', time: '16/09/2026 19:20' },
   ];

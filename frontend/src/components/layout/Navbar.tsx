@@ -14,6 +14,7 @@ import {
   User, 
   Building2, 
   ShieldCheck, 
+  Users,
   ArrowRight,
   LogOut
 } from 'lucide-react';
@@ -97,6 +98,13 @@ export function Navbar() {
             >
               <Zap className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
               <span>Cầu lông</span>
+            </Link>
+            <Link
+              href="/matches"
+              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
+            >
+              <Users className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
+              <span>Ghép kèo</span>
             </Link>
           </nav>
         </div>

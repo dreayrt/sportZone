@@ -107,7 +107,7 @@ export interface Booking {
   total_price: number;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
   payment_status: 'unpaid' | 'partial' | 'paid' | 'refunded';
-  payment_method: 'vietqr' | 'momo' | 'cash' | 'bank_transfer';
+  payment_method: 'vietqr' | 'cash' | 'bank_transfer';
   checked_in: boolean;
   checked_in_at?: string;
   created_at: string;

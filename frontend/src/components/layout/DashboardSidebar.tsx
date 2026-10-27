@@ -18,6 +18,7 @@ import {
   Sliders,
   History,
   ShieldCheck,
+  Tag,
   Home,
   ArrowLeft
 } from 'lucide-react';
@@ -33,6 +34,7 @@ export function DashboardSidebar() {
   const customerNav = [
     { title: 'Tổng quan', href: '/dashboard/customer', icon: LayoutDashboard },
     { title: 'Lịch sử đặt sân', href: '/dashboard/customer/bookings', icon: CalendarCheck },
+    { title: 'Kèo của tôi', href: '/dashboard/customer/matches', icon: Users },
     { title: 'Tích điểm & Hạng', href: '/dashboard/customer/loyalty', icon: Award },
     { title: 'Mã giới thiệu', href: '/dashboard/customer/referral', icon: Users },
     { title: 'Hồ sơ cá nhân', href: '/dashboard/customer/profile', icon: User },
@@ -52,6 +54,7 @@ export function DashboardSidebar() {
     { title: 'Thống kê toàn hệ thống', href: '/dashboard/admin', icon: LayoutDashboard },
     { title: 'Quản lý người dùng', href: '/dashboard/admin/users', icon: Users },
     { title: 'Danh mục môn thể thao', href: '/dashboard/admin/categories', icon: CircleDot },
+    { title: 'Mã khuyến mãi', href: '/dashboard/admin/vouchers', icon: Tag },
     { title: 'Cấu hình hệ thống', href: '/dashboard/admin/settings', icon: Sliders },
     { title: 'Nhật ký kiểm toán', href: '/dashboard/admin/audit-logs', icon: History },
   ];

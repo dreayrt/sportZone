@@ -21,7 +21,7 @@ export function Footer() {
             </p>
             <div className="flex items-center gap-2 text-xs text-neutral-500">
               <CheckCircle2 className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-              <span>Thanh toán VietQR xác nhận tức thì</span>
+              <span>Thanh toán QR qua SePay</span>
             </div>
           </div>
 

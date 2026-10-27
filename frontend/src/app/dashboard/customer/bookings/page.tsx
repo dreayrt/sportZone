@@ -6,8 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatVND, formatDate } from '@/lib/utils';
-import { MOCK_BOOKINGS, Booking } from '@/lib/mock-data';
-import { api } from '@/lib/api';
+import { Booking } from '@/lib/mock-data';
+import { api, SepayPaymentQr } from '@/lib/api';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   CalendarDays,
   Clock,
@@ -23,24 +24,27 @@ import {
 } from 'lucide-react';
 
 export default function CustomerBookingsPage() {
-  const [filter, setFilter] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
-  const [bookings, setBookings] = useState<Booking[]>(MOCK_BOOKINGS);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('Bận việc đột xuất');
   const [isCancelling, setIsCancelling] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentQr, setPaymentQr] = useState<SepayPaymentQr | null>(null);
+  const [paymentError, setPaymentError] = useState('');
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
 
   // Load from Backend API
   const fetchBookings = async () => {
     setIsLoading(true);
     try {
       const res = await api.bookings.getAll();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+      if (res.success && Array.isArray(res.data)) {
         setBookings(res.data);
       }
     } catch {
-      // Keep MOCK_BOOKINGS
+      setBookings([]);
     } finally {
       setIsLoading(false);
     }
@@ -49,6 +53,45 @@ export default function CustomerBookingsPage() {
   useEffect(() => {
     fetchBookings();
   }, []);
+
+  useEffect(() => {
+    setPaymentQr(null);
+    setPaymentError('');
+  }, [selectedBooking?.id]);
+
+  useEffect(() => {
+    if (!selectedBooking || !paymentQr || selectedBooking.payment_status === 'paid') return;
+    const intervalId = window.setInterval(async () => {
+      const response = await api.payments.getStatus(selectedBooking.booking_code);
+      if (response.success && response.data) {
+        const remainingAmount = Math.max(0, response.data.total_price - response.data.total_paid);
+        if (response.data.payment_status !== 'paid' && paymentQr.amount !== remainingAmount) {
+          const qrResponse = await api.payments.generateQr(selectedBooking.booking_code);
+          if (qrResponse.success && qrResponse.data?.payment) setPaymentQr(qrResponse.data.payment);
+        }
+        setBookings((current) => current.map((booking) => booking.id === selectedBooking.id
+          ? { ...booking, payment_status: response.data.payment_status as Booking['payment_status'], status: response.data.status as Booking['status'] }
+          : booking));
+        setSelectedBooking((current) => current?.id === selectedBooking.id
+          ? { ...current, payment_status: response.data.payment_status as Booking['payment_status'], status: response.data.status as Booking['status'] }
+          : current);
+      }
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [selectedBooking, paymentQr]);
+
+  const createPaymentQr = async () => {
+    if (!selectedBooking) return;
+    setIsCreatingPayment(true);
+    setPaymentError('');
+    const response = await api.payments.generateQr(selectedBooking.booking_code);
+    if (response.success && response.data?.payment) {
+      setPaymentQr(response.data.payment);
+    } else {
+      setPaymentError(response.message || 'Không lấy được QR SePay cho đơn này.');
+    }
+    setIsCreatingPayment(false);
+  };
 
   const handleCancelBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +145,16 @@ export default function CustomerBookingsPage() {
               }`}
             >
               Tất cả ({bookings.length})
+            </button>
+            <button
+              onClick={() => setFilter('pending')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                filter === 'pending'
+                  ? 'bg-white dark:bg-neutral-800 text-amber-600 shadow-xs font-semibold'
+                  : 'text-neutral-500 hover:text-neutral-900'
+              }`}
+            >
+              Chờ thanh toán
             </button>
             <button
               onClick={() => setFilter('confirmed')}
@@ -173,10 +226,13 @@ export default function CustomerBookingsPage() {
                     )}
                     <Badge variant={
                       b.status === 'confirmed' ? 'sport' :
-                      b.status === 'completed' ? 'success' : 'neutral'
+                      b.status === 'completed' ? 'success' :
+                      b.status === 'pending' ? 'warning' : 'neutral'
                     }>
                       {b.status === 'confirmed' ? 'Sắp diễn ra' :
-                       b.status === 'completed' ? 'Đã hoàn thành' : 'Đã hủy'}
+                       b.status === 'completed' ? 'Đã hoàn thành' :
+                       b.status === 'pending' ? (b.payment_status === 'partial' ? 'Chờ trả phần còn lại' : 'Chờ thanh toán') :
+                       b.status === 'no_show' ? 'Vắng mặt' : 'Đã hủy'}
                     </Badge>
                   </div>
                 </div>
@@ -205,7 +261,7 @@ export default function CustomerBookingsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {b.status === 'confirmed' && (
+                    {(b.status === 'confirmed' || b.status === 'pending') && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -222,7 +278,7 @@ export default function CustomerBookingsPage() {
                       className="text-xs gap-1.5"
                     >
                       <QrCode className="w-3.5 h-3.5" strokeWidth={1.5} />
-                      Vé QR Check-in
+                      Mã check-in / thanh toán
                     </Button>
                   </div>
                 </div>
@@ -251,14 +307,14 @@ export default function CustomerBookingsPage() {
                 </button>
               </div>
 
-              {/* QR box */}
+              {/* Show the payment provider QR only for unpaid bookings; paid bookings use the booking code for check-in. */}
               <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 flex flex-col items-center justify-center space-y-3">
                 <div className="w-44 h-44 bg-white p-2 rounded-lg border border-neutral-200 shadow-xs flex items-center justify-center">
-                  <img
-                    src={`https://api.vietqr.io/image/970436-0123456789-Q4fJkZ3.jpg?accountName=SPORTZONE%20CHECKIN&amount=${selectedBooking.total_price}&addInfo=${selectedBooking.booking_code}`}
-                    alt="Booking QR"
-                    className="w-full h-full object-contain"
-                  />
+                  {paymentQr && selectedBooking.payment_status !== 'paid' ? (
+                    <img src={paymentQr.qr_image_url} alt="QR thanh toán SePay" className="w-full h-full object-contain" />
+                  ) : (
+                    <QRCodeSVG value={selectedBooking.booking_code} size={160} level="M" includeMargin title={`Mã check-in ${selectedBooking.booking_code}`} />
+                  )}
                 </div>
                 <span className="text-base font-mono font-bold tracking-widest text-neutral-900 dark:text-white">
                   {selectedBooking.booking_code}
@@ -266,6 +322,17 @@ export default function CustomerBookingsPage() {
                 {selectedBooking.checked_in && (
                   <Badge variant="success">Đã điểm danh vào sân</Badge>
                 )}
+                {selectedBooking.payment_status !== 'paid' && !paymentQr && (
+                  <Button size="sm" variant="primary" disabled={isCreatingPayment} onClick={createPaymentQr}>{isCreatingPayment ? 'Đang tạo QR...' : 'Tạo QR thanh toán SePay'}</Button>
+                )}
+                {paymentQr && selectedBooking.payment_status !== 'paid' && (
+                  <div className="text-[11px] text-neutral-500 space-y-1">
+                    <p>Số tiền cần chuyển lần này: <strong>{formatVND(paymentQr.amount)}</strong></p>
+                    <p>{paymentQr.bank_name} · {paymentQr.account_no}</p>
+                    <p>Nội dung chuyển khoản: {paymentQr.transfer_content}</p>
+                  </div>
+                )}
+                {paymentError && <p role="alert" className="text-xs text-red-600">{paymentError}</p>}
               </div>
 
               <div className="text-left text-xs space-y-1.5 text-neutral-600 dark:text-neutral-300">
@@ -273,7 +340,7 @@ export default function CustomerBookingsPage() {
                 <p><strong>Sân:</strong> {selectedBooking.court?.name}</p>
                 <p><strong>Địa chỉ:</strong> {selectedBooking.venue?.address}, {selectedBooking.venue?.city}</p>
                 <p><strong>Khung giờ:</strong> {selectedBooking.start_time.slice(0, 5)} - {selectedBooking.end_time.slice(0, 5)} ngày {formatDate(selectedBooking.booking_date)}</p>
-                <p><strong>Tổng tiền:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(selectedBooking.total_price)}</span> ({selectedBooking.payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'})</p>
+                <p><strong>Tổng tiền:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(selectedBooking.total_price)}</span> ({selectedBooking.payment_status === 'paid' ? 'Đã thanh toán' : selectedBooking.payment_status === 'partial' ? 'Đã thanh toán một phần' : 'Chưa thanh toán'})</p>
                 <p className="text-neutral-400 text-[11px] pt-1">Xuất trình mã này cho nhân viên lễ tân tại sân để quét xác nhận.</p>
               </div>
 

@@ -206,6 +206,7 @@ CREATE TABLE payments (
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_payments_booking FOREIGN KEY(booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
  CONSTRAINT fk_payments_user FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+ UNIQUE KEY uq_payments_transaction_code(transaction_code),
  INDEX idx_payments_booking_status(booking_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -220,6 +221,49 @@ CREATE TABLE booking_status_history (
  CONSTRAINT fk_history_booking FOREIGN KEY(booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
  CONSTRAINT fk_history_user FOREIGN KEY(changed_by) REFERENCES users(id) ON DELETE SET NULL,
  INDEX idx_history_booking(booking_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE match_posts (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ user_id INT NOT NULL,
+ sport_category_id INT NOT NULL,
+ venue_id INT NULL,
+ court_id INT NULL,
+ title VARCHAR(200) NOT NULL,
+ description TEXT NULL,
+ match_date DATE NOT NULL,
+ start_time TIME NOT NULL,
+ end_time TIME NOT NULL,
+ location_note VARCHAR(255) NULL,
+ skill_level ENUM('all','beginner','intermediate','advanced') NOT NULL DEFAULT 'all',
+ required_members INT NOT NULL DEFAULT 1,
+ current_members INT NOT NULL DEFAULT 1,
+ estimated_cost_per_person INT NULL DEFAULT 0,
+ contact_phone VARCHAR(20) NULL,
+ status ENUM('open','full','completed','cancelled') NOT NULL DEFAULT 'open',
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ CONSTRAINT fk_match_posts_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ CONSTRAINT fk_match_posts_category FOREIGN KEY(sport_category_id) REFERENCES sport_categories(id),
+ CONSTRAINT fk_match_posts_venue FOREIGN KEY(venue_id) REFERENCES venues(id) ON DELETE SET NULL,
+ CONSTRAINT fk_match_posts_court FOREIGN KEY(court_id) REFERENCES courts(id) ON DELETE SET NULL,
+ INDEX idx_matches_category_status_date(sport_category_id,status,match_date),
+ INDEX idx_matches_user_status(user_id,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE match_members (
+ id INT AUTO_INCREMENT PRIMARY KEY,
+ match_post_id INT NOT NULL,
+ user_id INT NOT NULL,
+ message VARCHAR(255) NULL,
+ status ENUM('pending','accepted','rejected','left') NOT NULL DEFAULT 'pending',
+ joined_at TIMESTAMP NULL,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ CONSTRAINT fk_match_members_post FOREIGN KEY(match_post_id) REFERENCES match_posts(id) ON DELETE CASCADE,
+ CONSTRAINT fk_match_members_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ UNIQUE KEY uq_match_member(match_post_id,user_id),
+ INDEX idx_match_members_post_status(match_post_id,status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE reviews (

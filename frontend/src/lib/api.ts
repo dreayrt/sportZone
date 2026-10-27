@@ -7,6 +7,70 @@ export interface ApiResponse<T = any> {
   errors: any;
 }
 
+export interface VoucherItem {
+  id: number;
+  code: string;
+  name: string;
+  discount_type: 'fixed' | 'percent';
+  discount_value: number;
+  max_discount: number | null;
+  min_order_value: number;
+  usage_limit: number | null;
+  used_count: number;
+  starts_at: string;
+  ends_at: string;
+  status: 'active' | 'inactive';
+}
+
+export interface MatchPostItem {
+  id: number;
+  user_id: number;
+  sport_category_id: number;
+  venue_id: number | null;
+  court_id: number | null;
+  title: string;
+  description: string | null;
+  match_date: string;
+  start_time: string;
+  end_time: string;
+  location_note: string | null;
+  skill_level: 'all' | 'beginner' | 'intermediate' | 'advanced';
+  required_members: number;
+  current_members: number;
+  estimated_cost_per_person: number | null;
+  contact_phone: string | null;
+  status: 'open' | 'full' | 'completed' | 'cancelled';
+  creator?: { id: number; full_name: string; avatar: string | null };
+  sport_category?: { id: number; code: string; name: string };
+  venue?: { id: number; name: string; address?: string; district?: string; city?: string } | null;
+  court?: { id: number; name: string } | null;
+  accepted_members?: Array<{ id: number; user: { id: number; full_name: string; avatar: string | null } }>;
+  pending_members?: Array<{ id: number; message: string | null; user: { id: number; full_name: string; phone: string | null; avatar: string | null } }>;
+  is_creator?: boolean;
+  my_application?: { id: number; status: 'pending' | 'accepted' | 'rejected' | 'left'; message: string | null } | null;
+}
+
+export interface PaginatedData<T> {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface SepayPaymentQr {
+  provider: 'sepay';
+  method: 'vietqr';
+  qr_image_url: string;
+  bank_name: string;
+  account_no: string;
+  account_name: string;
+  amount: number;
+  transfer_content: string;
+  expires_in_minutes: number;
+  expires_at: string;
+}
+
 export interface NotificationItem {
   id: number;
   type: string;
@@ -329,6 +393,24 @@ export const api = {
   },
 
   admin: {
+    vouchers: {
+      list: (params?: { keyword?: string; status?: string; discount_type?: string; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.keyword) query.set('keyword', params.keyword);
+        if (params?.status) query.set('status', params.status);
+        if (params?.discount_type) query.set('discount_type', params.discount_type);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.per_page) query.set('per_page', String(params.per_page));
+        const qs = query.toString();
+        return apiRequest<PaginatedData<VoucherItem>>(`/admin/vouchers${qs ? `?${qs}` : ''}`);
+      },
+      create: (body: Partial<VoucherItem>) =>
+        apiRequest<VoucherItem>('/admin/vouchers', { method: 'POST', body: JSON.stringify(body) }),
+      update: (id: number, body: Partial<VoucherItem>) =>
+        apiRequest<VoucherItem>(`/admin/vouchers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+      delete: (id: number) =>
+        apiRequest(`/admin/vouchers/${id}`, { method: 'DELETE' }),
+    },
     users: {
       list: (params?: { search?: string; role?: string; status?: string; page?: number; per_page?: number }) => {
         const query = new URLSearchParams();
@@ -443,6 +525,65 @@ export const api = {
     getTimeline: (params?: { venue_id?: number; date?: string }) => {
       const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
       return apiRequest(`/owner/calendar${qs}`);
+    },
+  },
+
+  payments: {
+    generateQr: (bookingCode: string) =>
+      apiRequest<{ booking: { booking_code: string; total_price: number; payment_status: string }; payment: SepayPaymentQr }>(
+        '/payments/generate-qr',
+        { method: 'POST', body: JSON.stringify({ booking_code: bookingCode }) }
+      ),
+    getStatus: (bookingCode: string) =>
+      apiRequest<{ booking_code: string; total_price: number; total_paid: number; payment_status: string; status: string; is_paid: boolean }>(
+        `/payments/status/${encodeURIComponent(bookingCode)}`
+      ),
+  },
+
+  vouchers: {
+    validate: (code: string, totalAmount: number) =>
+      apiRequest<{
+        valid: boolean;
+        voucher: Pick<VoucherItem, 'id' | 'code' | 'name' | 'discount_type' | 'discount_value' | 'max_discount' | 'min_order_value'>;
+        total_amount: number;
+        discount_amount: number;
+        final_amount: number;
+        message?: string;
+      }>('/vouchers/validate', {
+        method: 'POST',
+        body: JSON.stringify({ code, total_amount: totalAmount }),
+      }),
+  },
+
+  matches: {
+    list: (params?: Record<string, string | number>) => {
+      const qs = params ? `?${new URLSearchParams(params as any).toString()}` : '';
+      return apiRequest<PaginatedData<MatchPostItem>>(`/matches${qs}`);
+    },
+    get: (id: number) => apiRequest<MatchPostItem>(`/matches/${id}`),
+    create: (body: Record<string, unknown>) =>
+      apiRequest<MatchPostItem>('/matches', { method: 'POST', body: JSON.stringify(body) }),
+    join: (id: number, message?: string) =>
+      apiRequest(`/matches/${id}/join`, { method: 'POST', body: JSON.stringify({ message }) }),
+    leave: (id: number) =>
+      apiRequest(`/matches/${id}/leave`, { method: 'POST' }),
+    accept: (matchId: number, memberId: number) =>
+      apiRequest(`/matches/${matchId}/members/${memberId}/accept`, { method: 'PUT' }),
+    reject: (matchId: number, memberId: number) =>
+      apiRequest(`/matches/${matchId}/members/${memberId}/reject`, { method: 'PUT' }),
+    myCreated: (params?: { page?: number; per_page?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.per_page) query.set('per_page', String(params.per_page));
+      const qs = query.toString();
+      return apiRequest<PaginatedData<MatchPostItem>>(`/my-matches/created${qs ? `?${qs}` : ''}`);
+    },
+    myJoined: (params?: { page?: number; per_page?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.page) query.set('page', String(params.page));
+      if (params?.per_page) query.set('per_page', String(params.per_page));
+      const qs = query.toString();
+      return apiRequest<PaginatedData<{ id: number; status: string; match_post: MatchPostItem }>>(`/my-matches/joined${qs ? `?${qs}` : ''}`);
     },
   }
 };

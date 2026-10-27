@@ -9,7 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatVND, formatDate } from '@/lib/utils';
-import { api } from '@/lib/api';
+import { api, SepayPaymentQr } from '@/lib/api';
 import {
   CalendarDays,
   Clock,
@@ -64,10 +64,18 @@ export default function BookingWizardPage() {
   const [bookingDate, setBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedSlot, setSelectedSlot] = useState('18:00 - 19:30');
   const [addonsCount, setAddonsCount] = useState<Record<number, number>>({ 1: 2, 2: 1 }); // default 2 waters, 1 pocari
-  const [voucherCode, setVoucherCode] = useState('SPORT30');
-  const [appliedDiscount, setAppliedDiscount] = useState(30000);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [voucherMessage, setVoucherMessage] = useState('');
+  const [isVoucherValidating, setIsVoucherValidating] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [createdBookingCode, setCreatedBookingCode] = useState('SZ-77812');
+  const [createdBookingCode, setCreatedBookingCode] = useState('');
+  const [paymentQr, setPaymentQr] = useState<SepayPaymentQr | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'unpaid' | 'partial' | 'paid' | 'refunded'>('unpaid');
+  const [totalPaid, setTotalPaid] = useState(0);
+  const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(0);
+  const [serverBooking, setServerBooking] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -114,7 +122,7 @@ export default function BookingWizardPage() {
   useEffect(() => {
     if (user) {
       if (!customerName || customerName === 'Nguyễn Minh Anh') setCustomerName(user.full_name);
-      if (!customerPhone || customerPhone === '0912345678') setCustomerPhone(user.phone);
+      if (!customerPhone || customerPhone === '0912345678') setCustomerPhone(user.phone || '');
       if (user.email) setCustomerEmail(user.email);
     }
   }, [user]);
@@ -130,77 +138,120 @@ export default function BookingWizardPage() {
     return sum + (addon ? addon.price * count : 0);
   }, 0);
 
-  const totalPrice = Math.max(0, courtFee + addonsFee - appliedDiscount);
+  const subtotal = courtFee + addonsFee;
+  const totalPrice = serverBooking?.total_price ?? Math.max(0, subtotal - appliedDiscount);
+  const displayedDiscount = serverBooking?.discount_amount ?? appliedDiscount;
 
-  const handleApplyVoucher = (e: React.FormEvent) => {
+  const handleApplyVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = voucherCode.trim().toUpperCase();
-    if (code === 'SPORTZONE50') {
-      setAppliedDiscount(50000);
-      alert('Áp dụng thành công mã SPORTZONE50: Giảm 50.000đ!');
-    } else if (code === 'SPORT30') {
-      setAppliedDiscount(30000);
-      alert('Áp dụng thành công mã SPORT30: Giảm 30.000đ!');
-    } else if (code === 'WELCOME10') {
-      const discount = Math.min(80000, Math.round((courtFee + addonsFee) * 0.1));
-      setAppliedDiscount(discount);
-      alert(`Áp dụng thành công mã WELCOME10: Giảm ${formatVND(discount)}!`);
-    } else {
-      alert('Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+    if (!code) {
+      setAppliedVoucherCode('');
+      setAppliedDiscount(0);
+      setVoucherMessage('Nhập mã voucher để kiểm tra.');
+      return;
     }
+
+    setIsVoucherValidating(true);
+    setVoucherMessage('');
+    const response = await api.vouchers.validate(code, subtotal);
+    if (response.success && response.data?.valid) {
+      setAppliedVoucherCode(response.data.voucher.code);
+      setVoucherCode(response.data.voucher.code);
+      setAppliedDiscount(response.data.discount_amount);
+      setVoucherMessage(response.data.message || `Đã giảm ${formatVND(response.data.discount_amount)}.`);
+    } else {
+      setAppliedVoucherCode('');
+      setAppliedDiscount(0);
+      setVoucherMessage(response.message || 'Mã voucher không hợp lệ.');
+    }
+    setIsVoucherValidating(false);
   };
 
-  const handleCompleteBooking = async () => {
+  const handleStartPayment = async () => {
     setIsSubmitting(true);
     setErrorMessage('');
 
-    // Parse start and end time from selectedSlot
-    const parts = selectedSlot.split(' - ');
-    const startTime = parts[0]?.trim() || '18:00';
-    const endTime = parts[1]?.trim() || '19:30';
-
-    const addonsPayload = Object.entries(addonsCount)
-      .filter(([_, qty]) => qty > 0)
-      .map(([idStr, qty]) => ({
-        addon_id: parseInt(idStr, 10),
-        quantity: qty
-      }));
-
-    const payload = {
-      court_id: selectedCourt!.id,
-      booking_date: bookingDate,
-      start_time: startTime,
-      end_time: endTime,
-      customer_name: customerName || 'Khách Hàng',
-      customer_phone: customerPhone || '0912345678',
-      customer_email: customerEmail || undefined,
-      note: note || undefined,
-      addons: addonsPayload,
-      voucher_code: appliedDiscount > 0 ? voucherCode : undefined,
-      payment_method: 'vietqr',
-      payment_status: 'paid',
-      source: 'website',
-    };
-
     try {
-      const res = await api.bookings.create(payload);
+      let bookingCode = createdBookingCode;
+      if (!bookingCode) {
+        const [startTime = '18:00', endTime = '19:30'] = selectedSlot.split(' - ').map((value) => value.trim());
+        const addonsPayload = Object.entries(addonsCount)
+          .filter(([, quantity]) => quantity > 0)
+          .map(([id, quantity]) => ({ addon_id: Number(id), quantity }));
 
-      if (res.success && res.data) {
-        setCreatedBookingCode(res.data.booking_code);
-        setIsSuccess(true);
-      } else {
-        const errorMsg = res.message || res.errors?.slot?.[0] || 'Không thể tạo đơn đặt sân.';
-        setErrorMessage(errorMsg);
-        alert(`Lỗi đặt sân: ${errorMsg}`);
+        const bookingResponse = await api.bookings.create({
+          court_id: selectedCourt!.id,
+          booking_date: bookingDate,
+          start_time: startTime,
+          end_time: endTime,
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone.trim(),
+          customer_email: customerEmail.trim() || undefined,
+          note: note.trim() || undefined,
+          addons: addonsPayload,
+          voucher_code: appliedVoucherCode || undefined,
+        });
+
+        if (!bookingResponse.success || !bookingResponse.data?.booking_code) {
+          setErrorMessage(bookingResponse.message || bookingResponse.errors?.slot?.[0] || 'Không thể tạo đơn đặt sân.');
+          return;
+        }
+
+        bookingCode = bookingResponse.data.booking_code;
+        setCreatedBookingCode(bookingCode);
+        setServerBooking(bookingResponse.data);
+        setPaymentStatus(bookingResponse.data.payment_status || 'unpaid');
       }
-    } catch (err: any) {
-      // Visual fallback
-      setCreatedBookingCode('SZ-' + Math.floor(10000 + Math.random() * 90000));
-      setIsSuccess(true);
+
+      const qrResponse = await api.payments.generateQr(bookingCode);
+      if (!qrResponse.success || !qrResponse.data?.payment?.qr_image_url) {
+        setCurrentStep(4);
+        setErrorMessage(qrResponse.message || 'Đơn đã tạo nhưng chưa lấy được QR SePay. Hãy thử tạo QR lại.');
+        return;
+      }
+
+      setPaymentQr(qrResponse.data.payment);
+      setPaymentStatus(qrResponse.data.booking.payment_status as typeof paymentStatus);
+      setCurrentStep(4);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (currentStep !== 4 || !createdBookingCode || isSuccess) return;
+
+    const checkStatus = async () => {
+      const response = await api.payments.getStatus(createdBookingCode);
+      if (!response.success || !response.data) return;
+
+      setPaymentStatus(response.data.payment_status as typeof paymentStatus);
+      setTotalPaid(response.data.total_paid || 0);
+      setServerBooking((current: any) => current ? { ...current, total_price: response.data.total_price } : current);
+      const remainingAmount = Math.max(0, response.data.total_price - response.data.total_paid);
+      if (!response.data.is_paid && paymentQr && paymentQr.amount !== remainingAmount) {
+        const qrResponse = await api.payments.generateQr(createdBookingCode);
+        if (qrResponse.success && qrResponse.data?.payment) setPaymentQr(qrResponse.data.payment);
+      }
+      if (response.data.is_paid) setIsSuccess(true);
+      if (response.data.status === 'cancelled') setErrorMessage('Đơn đã hết thời gian giữ chỗ. Vui lòng tạo đơn mới.');
+    };
+
+    checkStatus();
+    const intervalId = window.setInterval(checkStatus, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [currentStep, createdBookingCode, isSuccess, paymentQr]);
+
+  useEffect(() => {
+    if (!paymentQr?.expires_at) return;
+    const updateCountdown = () => {
+      setPaymentSecondsLeft(Math.max(0, Math.floor((new Date(paymentQr.expires_at).getTime() - Date.now()) / 1000)));
+    };
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [paymentQr]);
 
   // Đang kiểm tra auth hoặc sắp redirect -> hiện loading, tránh nháy nội dung
   if (isAuthLoading || !user) {
@@ -231,7 +282,7 @@ export default function BookingWizardPage() {
 
         {/* Progress Bar */}
         <div className="grid grid-cols-4 gap-2">
-          {['1. Khung Giờ & Thông Tin', '2. Dịch Vụ', '3. Voucher', '4. VietQR'].map((label, idx) => (
+          {['1. Khung Giờ & Thông Tin', '2. Dịch Vụ', '3. Voucher', '4. SePay'].map((label, idx) => (
             <div key={label} className="space-y-1">
               <div
                 className={`h-1.5 rounded-full transition-all ${
@@ -261,12 +312,12 @@ export default function BookingWizardPage() {
             <Check className="w-8 h-8" strokeWidth={2.5} />
           </div>
           <div className="space-y-2">
-            <Badge variant="sport" size="md">Thanh toán VietQR Hoàn Tất</Badge>
+            <Badge variant="success" size="md">Thanh toán qua SePay hoàn tất</Badge>
             <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
               Mã Đặt Sân: {createdBookingCode}
             </h2>
             <p className="text-xs text-neutral-500 max-w-md mx-auto">
-              Hệ thống đã lưu thông tin đặt sân vào cơ sở dữ liệu và kích hoạt mã QR điểm danh (Check-in) cho bạn.
+              Hệ thống đã xác nhận giao dịch SePay và cập nhật đơn đặt sân của bạn.
             </p>
           </div>
 
@@ -274,7 +325,7 @@ export default function BookingWizardPage() {
             <p><strong>Người đặt:</strong> {customerName} ({customerPhone})</p>
             <p><strong>Sân:</strong> {selectedCourt.name}</p>
             <p><strong>Giờ chơi:</strong> {selectedSlot} ngày {formatDate(bookingDate)}</p>
-            <p><strong>Tổng thanh toán:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(totalPrice)}</span></p>
+            <p><strong>Tổng thanh toán:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(serverBooking?.total_price ?? totalPrice)}</span></p>
           </div>
 
           <div className="flex items-center justify-center gap-3 pt-2">
@@ -499,23 +550,30 @@ export default function BookingWizardPage() {
                   <form onSubmit={handleApplyVoucher} className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Nhập mã: SPORTZONE50, SPORT30 hoặc WELCOME10"
+                      placeholder="Nhập mã voucher"
                       value={voucherCode}
-                      onChange={(e) => setVoucherCode(e.target.value)}
+                      onChange={(e) => {
+                        setVoucherCode(e.target.value);
+                        setAppliedVoucherCode('');
+                        setAppliedDiscount(0);
+                        setVoucherMessage('');
+                      }}
                       className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 font-mono uppercase bg-white dark:bg-neutral-900"
                     />
-                    <Button type="submit" variant="secondary" size="sm">
-                      Áp Dụng
+                    <Button type="submit" variant="secondary" size="sm" disabled={isVoucherValidating}>
+                      {isVoucherValidating ? 'Đang kiểm tra...' : 'Áp Dụng'}
                     </Button>
                   </form>
 
-                  {appliedDiscount > 0 && (
+                  {voucherMessage && <p role="status" className={`text-xs ${appliedVoucherCode ? 'text-emerald-700' : 'text-neutral-500'}`}>{voucherMessage}</p>}
+
+                  {appliedVoucherCode && appliedDiscount > 0 && (
                     <div className="p-3 rounded-lg bg-sport-50 dark:bg-sport-950/40 border border-sport-200 dark:border-sport-800 text-xs text-sport-800 dark:text-sport-300 flex items-center justify-between">
                       <span className="flex items-center gap-1.5 font-medium">
                         <CheckCircle2 className="w-4 h-4 text-sport-500" />
-                        Đã áp dụng mã {voucherCode.toUpperCase()}: Giảm {formatVND(appliedDiscount)}
+                        Đã áp dụng mã {appliedVoucherCode}: Giảm {formatVND(appliedDiscount)}
                       </span>
-                      <button onClick={() => setAppliedDiscount(0)} className="text-neutral-400 hover:text-red-500">
+                      <button type="button" onClick={() => { setAppliedVoucherCode(''); setAppliedDiscount(0); setVoucherMessage('Đã gỡ voucher.'); }} className="text-neutral-400 hover:text-red-500">
                         Gỡ mã
                       </button>
                     </div>
@@ -525,8 +583,8 @@ export default function BookingWizardPage() {
                     <Button variant="outline" size="sm" onClick={() => setCurrentStep(2)}>
                       Quay lại
                     </Button>
-                    <Button variant="primary" size="sm" onClick={() => setCurrentStep(4)}>
-                      Tiếp tục: Thanh toán VietQR
+                    <Button variant="primary" size="sm" disabled={isSubmitting} onClick={handleStartPayment}>
+                      {isSubmitting ? 'Đang tạo đơn...' : 'Tạo đơn & tiếp tục SePay'}
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
@@ -534,40 +592,40 @@ export default function BookingWizardPage() {
               </Card>
             )}
 
-            {/* STEP 4: VIETQR PAYMENT */}
+            {/* STEP 4: SEPAY PAYMENT */}
             {currentStep === 4 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <QrCode className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-                    Quét Mã VietQR Chuyển Khoản
+                    Thanh toán bằng QR SePay
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 text-center">
-                  <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 max-w-xs mx-auto space-y-3">
-                    <img
-                      src={`https://api.vietqr.io/image/970436-0123456789-Q4fJkZ3.jpg?accountName=SPORTZONE%20VIETNAM&amount=${totalPrice}&addInfo=SZ77812`}
-                      alt="VietQR"
-                      className="w-full h-auto rounded-lg border shadow-xs"
-                    />
-                    <div className="text-xs text-neutral-500 font-mono space-y-0.5 text-left pt-1">
-                      <p>Ngân hàng: <strong>Vietcombank</strong></p>
-                      <p>Số TK: <strong>0123456789</strong></p>
-                      <p>Số tiền: <strong className="text-sport-600">{formatVND(totalPrice)}</strong></p>
+                  {paymentQr ? (
+                    <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 max-w-sm mx-auto space-y-3">
+                      <img src={paymentQr.qr_image_url} alt="QR thanh toán SePay" className="w-full max-w-[280px] mx-auto h-auto rounded-lg border bg-white shadow-xs" />
+                      <div className="text-xs text-neutral-600 dark:text-neutral-300 space-y-1 text-left pt-1">
+                        <p>Ngân hàng: <strong>{paymentQr.bank_name}</strong></p>
+                        <p>Số tài khoản: <strong className="font-mono">{paymentQr.account_no}</strong></p>
+                        <p>Chủ tài khoản: <strong>{paymentQr.account_name}</strong></p>
+                        <p>Số tiền: <strong className="text-sport-600">{formatVND(paymentQr.amount)}</strong></p>
+                        <p>Nội dung chuyển khoản: <strong className="font-mono select-all">{paymentQr.transfer_content}</strong></p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="max-w-sm mx-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                      Đơn <strong>{createdBookingCode}</strong> đã được tạo. Chưa lấy được QR SePay.
+                      <div className="mt-3"><Button size="sm" variant="secondary" disabled={isSubmitting} onClick={handleStartPayment}>Thử tạo QR lại</Button></div>
+                    </div>
+                  )}
 
-                  <p className="text-xs text-neutral-400">
-                    Mở ứng dụng ngân hàng hoặc ví điện tử để quét mã thanh toán tức thì.
-                  </p>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <Button variant="outline" size="sm" onClick={() => setCurrentStep(3)}>
-                      Quay lại
-                    </Button>
-                    <Button variant="primary" size="sm" disabled={isSubmitting} onClick={handleCompleteBooking}>
-                      {isSubmitting ? 'Đang Xử Lý Đơn...' : 'Xác Nhận & Hoàn Tất Đặt Sân'}
-                    </Button>
+                  <div className="max-w-md mx-auto space-y-2">
+                    <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                      {paymentStatus === 'partial' ? `Đã nhận ${formatVND(totalPaid)}. Đang chờ thanh toán đủ.` : 'Mở ứng dụng ngân hàng để quét mã. Hệ thống tự kiểm tra giao dịch SePay.'}
+                    </p>
+                    {paymentQr && <p className="text-xs text-neutral-500">Mã đơn {createdBookingCode} · QR còn hiệu lực {Math.floor(paymentSecondsLeft / 60)}:{String(paymentSecondsLeft % 60).padStart(2, '0')}</p>}
+                    <p className="text-[11px] text-neutral-400">Trang sẽ tự cập nhật khi webhook SePay xác nhận thanh toán.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -609,10 +667,10 @@ export default function BookingWizardPage() {
                       <span className="font-mono">{formatVND(addonsFee)}</span>
                     </div>
                   )}
-                  {appliedDiscount > 0 && (
+                  {displayedDiscount > 0 && (
                     <div className="flex justify-between text-sport-600 font-semibold">
                       <span>Giảm giá voucher:</span>
-                      <span className="font-mono">-{formatVND(appliedDiscount)}</span>
+                      <span className="font-mono">-{formatVND(displayedDiscount)}</span>
                     </div>
                   )}
                 </div>

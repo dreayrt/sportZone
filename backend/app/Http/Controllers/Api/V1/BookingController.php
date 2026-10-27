@@ -11,6 +11,7 @@ use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BookingController extends BaseController
@@ -71,8 +72,8 @@ class BookingController extends BaseController
             $search = trim($request->query('search'));
             $query->where(function ($q) use ($search) {
                 $q->where('booking_code', 'LIKE', "%{$search}%")
-                  ->orWhere('customer_name', 'LIKE', "%{$search}%")
-                  ->orWhere('customer_phone', 'LIKE', "%{$search}%");
+                    ->orWhere('customer_name', 'LIKE', "%{$search}%")
+                    ->orWhere('customer_phone', 'LIKE', "%{$search}%");
             });
         }
 
@@ -86,7 +87,16 @@ class BookingController extends BaseController
      */
     public function store(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        // This endpoint also supports guest checkout, so it is intentionally
+        // outside auth:sanctum middleware. Resolve an optional bearer token
+        // explicitly so signed-in customers are still linked to their booking.
+        $user = $request->user('sanctum');
+        $requestedSource = $request->input('source', 'website');
+        $isStaffBooking = $user
+            && ($user->isOwner() || $user->isAdmin())
+            && in_array($requestedSource, ['counter', 'admin'], true);
+
+        $rules = [
             'court_id' => 'required|integer|exists:courts,id',
             'booking_date' => 'required|date_format:Y-m-d',
             'start_time' => 'required|string',
@@ -99,10 +109,15 @@ class BookingController extends BaseController
             'addons.*.addon_id' => 'required|integer|exists:addons,id',
             'addons.*.quantity' => 'required|integer|min:1',
             'voucher_code' => 'nullable|string|max:50',
-            'payment_method' => 'nullable|in:vietqr,momo,cash,bank_transfer',
-            'payment_status' => 'nullable|in:unpaid,partial,paid',
-            'source' => 'nullable|in:website,counter,admin',
-        ], [
+        ];
+
+        if ($isStaffBooking) {
+            $rules['payment_method'] = 'nullable|in:vietqr,cash,bank_transfer';
+            $rules['payment_status'] = 'nullable|in:unpaid,paid';
+            $rules['source'] = 'required|in:counter,admin';
+        }
+
+        $validator = Validator::make($request->all(), $rules, [
             'court_id.required' => 'Vui lòng chọn sân thi đấu.',
             'booking_date.required' => 'Vui lòng chọn ngày đặt sân.',
             'start_time.required' => 'Vui lòng chọn giờ bắt đầu.',
@@ -116,12 +131,43 @@ class BookingController extends BaseController
         }
 
         try {
+            $payload = $validator->validated();
+
+            if ($isStaffBooking) {
+                if ($user->isOwner()) {
+                    $court = Court::with('venue')->findOrFail($payload['court_id']);
+                    if ($court->venue?->owner_id !== $user->id) {
+                        return $this->forbidden('Bạn chỉ có thể tạo đơn tại cơ sở sân của mình.');
+                    }
+
+                    $payload['source'] = 'counter';
+                }
+
+                $payload['payment_method'] = $payload['payment_method'] ?? 'cash';
+                if ($payload['payment_method'] === 'vietqr') {
+                    $payload['payment_status'] = 'unpaid';
+                    $payload['status'] = 'pending';
+                } else {
+                    $payload['payment_status'] = $payload['payment_status'] ?? 'unpaid';
+                    $payload['status'] = $payload['payment_status'] === 'paid' ? 'confirmed' : 'pending';
+                }
+            } else {
+                // Website bookings are always pending and unpaid. Client-supplied
+                // payment status, source and method never control this transition.
+                $payload['source'] = 'website';
+                $payload['status'] = 'pending';
+                $payload['payment_status'] = 'unpaid';
+                $payload['payment_method'] = 'vietqr';
+            }
+
             $booking = $this->bookingService->createBooking(
-                $validator->validated(),
-                $request->user()
+                $payload,
+                $user
             );
 
-            return $this->successResponse($booking, 'Đặt sân thành công! Mã đơn của bạn là ' . $booking->booking_code, 201);
+            return $this->successResponse($booking, 'Đặt sân thành công! Mã đơn của bạn là '.$booking->booking_code, 201);
+        } catch (ValidationException $e) {
+            return $this->validationError($e->errors());
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 422);
         }
@@ -135,28 +181,39 @@ class BookingController extends BaseController
         $user = $request->user();
 
         $booking = Booking::with([
-            'venue:id,name,address,district,city,phone',
+            'venue:id,owner_id,name,address,district,city,phone',
             'court:id,name,surface_type,indoor,hourly_rate_standard,hourly_rate_peak',
             'bookingAddons',
             'voucher:id,code,name,discount_type,discount_value',
             'statusHistories',
-            'payments'
+            'payments',
         ])
-        ->where(function ($q) use ($idOrCode) {
-            if (is_numeric($idOrCode)) {
-                $q->where('id', (int) $idOrCode);
-            } else {
-                $q->where('booking_code', strtoupper($idOrCode));
-            }
-        })
-        ->first();
+            ->where(function ($q) use ($idOrCode) {
+                if (is_numeric($idOrCode)) {
+                    $q->where('id', (int) $idOrCode);
+                } else {
+                    $q->where('booking_code', strtoupper($idOrCode));
+                }
+            })
+            ->first();
 
-        if (!$booking) {
+        if (! $booking) {
             return $this->notFound('Không tìm thấy đơn đặt sân tương ứng.');
         }
 
-        // Kiểm tra quyền nếu là customer
-        if ($user && $user->isCustomer() && $booking->user_id && $booking->user_id !== $user->id) {
+        if (! $user) {
+            return $this->forbidden('Vui lòng đăng nhập để xem thông tin đơn đặt sân.');
+        }
+
+        if ($user->isCustomer() && $booking->user_id !== $user->id) {
+            return $this->forbidden('Bạn không có quyền xem thông tin đơn đặt sân này.');
+        }
+
+        if ($user->isOwner() && $booking->venue?->owner_id !== $user->id) {
+            return $this->forbidden('Bạn chỉ có thể xem đơn đặt sân thuộc cơ sở của mình.');
+        }
+
+        if (! $user->isAdmin() && ! $user->isCustomer() && ! $user->isOwner()) {
             return $this->forbidden('Bạn không có quyền xem thông tin đơn đặt sân này.');
         }
 
@@ -180,6 +237,7 @@ class BookingController extends BaseController
 
         try {
             $updated = $this->bookingService->cancelBooking($booking, $reason, $user);
+
             return $this->successResponse($updated, 'Đã hủy đơn đặt sân thành công.');
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 400);
@@ -192,10 +250,18 @@ class BookingController extends BaseController
     public function checkIn(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $booking = Booking::findOrFail($id);
+        if (! $user || (! $user->isOwner() && ! $user->isAdmin())) {
+            return $this->forbidden('Chỉ chủ sân hoặc quản trị viên mới có quyền check-in đơn đặt sân.');
+        }
+
+        $booking = Booking::with('venue')->findOrFail($id);
+        if ($user->isOwner() && $booking->venue?->owner_id !== $user->id) {
+            return $this->forbidden('Bạn chỉ có thể check-in đơn thuộc cơ sở sân của mình.');
+        }
 
         try {
             $updated = $this->bookingService->checkInBooking($booking, $user);
+
             return $this->successResponse($updated, "Điểm danh thành công cho đơn {$updated->booking_code}!");
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 400);
@@ -226,7 +292,7 @@ class BookingController extends BaseController
             'note' => 'nullable|string|max:500',
             'status' => 'nullable|in:pending,confirmed,completed,cancelled,no_show',
             'payment_status' => 'nullable|in:unpaid,partial,paid,refunded',
-            'payment_method' => 'nullable|in:vietqr,momo,cash,bank_transfer',
+            'payment_method' => 'nullable|in:vietqr,cash,bank_transfer',
             'cancel_reason' => 'nullable|string|max:255',
             'status_note' => 'nullable|string|max:255',
         ]);
@@ -237,6 +303,7 @@ class BookingController extends BaseController
 
         try {
             $updated = $this->bookingService->updateBooking($booking, $validator->validated(), $user);
+
             return $this->successResponse($updated, 'Cập nhật thông tin đơn đặt thành công.');
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 422);
@@ -279,6 +346,7 @@ class BookingController extends BaseController
                 (int) $request->input('quantity'),
                 $user
             );
+
             return $this->successResponse($updated, 'Đã cập nhật dịch vụ đi kèm vào đơn đặt thành công.');
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 422);
@@ -303,6 +371,7 @@ class BookingController extends BaseController
 
         try {
             $updated = $this->bookingService->removeBookingAddon($booking, $addonId, $user);
+
             return $this->successResponse($updated, 'Đã xóa dịch vụ đi kèm khỏi đơn đặt sân.');
         } catch (Exception $e) {
             return $this->errorResponse($e->getMessage(), 422);
@@ -356,7 +425,7 @@ class BookingController extends BaseController
         $user = $request->user();
         $venueId = $request->query('venue_id');
 
-        if (!$venueId) {
+        if (! $venueId) {
             if ($user && $user->isOwner()) {
                 $venue = Venue::where('owner_id', $user->id)->first();
             } else {
@@ -366,7 +435,7 @@ class BookingController extends BaseController
             $venue = Venue::findOrFail($venueId);
         }
 
-        if (!$venue) {
+        if (! $venue) {
             return $this->notFound('Không tìm thấy cơ sở sân tương ứng.');
         }
 

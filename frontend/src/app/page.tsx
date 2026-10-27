@@ -72,7 +72,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 max-w-xl mx-auto leading-relaxed">
-            Tra cứu slot giờ trống chính xác, thanh toán chuyển khoản VietQR tự động và check-in vào sân không cần chờ đợi.
+            Tra cứu slot giờ trống, thanh toán chuyển khoản qua SePay và check-in vào sân thuận tiện.
           </p>
 
           {/* Quick Search Widget */}
@@ -284,7 +284,7 @@ export default function HomePage() {
               <div className="w-10 h-10 rounded-xl bg-sport-500/20 text-sport-400 flex items-center justify-center">
                 <Zap className="w-5 h-5" strokeWidth={1.5} />
               </div>
-              <h3 className="font-bold text-base">Thanh Toán VietQR Xác Nhận Tức Thì</h3>
+              <h3 className="font-bold text-base">Thanh Toán QR Qua SePay</h3>
               <p className="text-xs text-neutral-400 leading-relaxed">
                 Không cần gửi hóa đơn chụp màn hình cho chủ sân. Hệ thống tự động kích hoạt mã đơn ngay khi nhận giao dịch ngân hàng.
               </p>
