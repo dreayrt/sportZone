@@ -11,9 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('payments', function (Blueprint $table) {
-            $table->unique('transaction_code', 'uq_payments_transaction_code');
-        });
+        try {
+            Schema::table('payments', function (Blueprint $table) {
+                $table->unique('transaction_code', 'uq_payments_transaction_code');
+            });
+        } catch (\Throwable $e) {
+            // Index already exists
+        }
     }
 
     /**

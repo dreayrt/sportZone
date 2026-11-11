@@ -34,6 +34,8 @@ class AuthAndBaseApiTest extends TestCase
         }
 
         $user->tokens()->delete();
+        \App\Models\UserPoint::where('user_id', $userId)->delete();
+        \App\Models\ReferralCode::where('user_id', $userId)->delete();
         $user->delete();
     }
     public function test_health_check_returns_ok(): void

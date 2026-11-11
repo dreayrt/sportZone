@@ -26,7 +26,7 @@ interface ReviewItem {
   rating: number;
   comment: string;
   status: 'visible' | 'hidden';
-  created_at: string;
+  created_at: string | null;
   user: {
     id: number | null;
     name: string;
@@ -329,7 +329,7 @@ export function ReviewSection({
                             </Badge>
                           </div>
                           <span className="text-[11px] text-neutral-400">
-                            {formatDate(r.created_at)}
+                            {r.created_at ? formatDate(r.created_at) : 'Không rõ thời gian'}
                           </span>
                         </div>
                       </div>

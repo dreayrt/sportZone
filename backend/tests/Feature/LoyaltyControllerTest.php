@@ -57,7 +57,7 @@ class LoyaltyControllerTest extends TestCase
             ->assertJsonPath('data.current_tier', 'silver')
             ->assertJsonPath('data.next_tier', 'gold')
             ->assertJsonPath('data.points_to_next_tier', 1380)
-            ->assertJsonPath('data.redemption.enabled', false);
+            ->assertJsonPath('data.redemption.enabled', true);
         $history->assertOk()
             ->assertJsonCount(1, 'data.transactions')
             ->assertJsonPath('data.transactions.0.id', $mine->id)
@@ -182,7 +182,7 @@ class LoyaltyControllerTest extends TestCase
         $this->assertSame(0, PointTransaction::query()->where('user_id', $user->id)->count());
     }
 
-    public function test_redeem_api_does_not_deduct_points_while_user_voucher_ownership_is_unavailable(): void
+    public function test_redeem_api_successfully_creates_voucher_and_deducts_points(): void
     {
         $user = $this->createUser();
         UserPoint::create([
@@ -195,11 +195,38 @@ class LoyaltyControllerTest extends TestCase
 
         $response = $this->postJson('/api/v1/loyalty/redeem', ['points' => 100]);
 
-        $response->assertStatus(409)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('errors.redemption.enabled', false);
-        $this->assertSame(500, $user->points()->firstOrFail()->total_points);
-        $this->assertSame(0, PointTransaction::query()->where('user_id', $user->id)->count());
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.remaining_points', 400);
+
+        $voucherCode = $response->json('data.voucher.code');
+        $this->assertNotEmpty($voucherCode);
+        $this->assertDatabaseHas('vouchers', [
+            'code' => $voucherCode,
+            'discount_value' => 50000,
+            'status' => 'active',
+        ]);
+        $this->assertSame(400, $user->points()->firstOrFail()->total_points);
+        $this->assertSame(500, $user->points()->firstOrFail()->lifetime_points);
+        $this->assertSame(1, PointTransaction::query()->where('user_id', $user->id)->count());
+    }
+
+    public function test_redeem_api_rejects_when_insufficient_points(): void
+    {
+        $user = $this->createUser();
+        UserPoint::create([
+            'user_id' => $user->id,
+            'total_points' => 30,
+            'lifetime_points' => 30,
+            'tier' => 'bronze',
+        ]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/loyalty/redeem', ['points' => 50]);
+
+        $response->assertStatus(400)
+            ->assertJsonPath('success', false);
+        $this->assertSame(30, $user->points()->firstOrFail()->total_points);
     }
 
     public function test_history_is_paginated_newest_first(): void

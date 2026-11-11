@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Filters, Page, Sport, Venue, venueRequest } from '@/lib/venues-api';
 import { Notice } from '@/components/venues/Shared';
+import { useVenueReviewSummaries } from '@/hooks/useVenueReviewSummaries';
 import { formatVND } from '@/lib/utils';
 import {
   Search,
@@ -44,6 +45,8 @@ export default function HomePage() {
   }, []);
   const [selectedSport, setSelectedSport] = useState('all');
   const [selectedCity, setSelectedCity] = useState('all');
+  const venueIds = React.useMemo(() => venues.map((venue) => venue.id), [venues]);
+  const { summaries, isLoading: isLoadingRatings } = useVenueReviewSummaries(venueIds);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +222,11 @@ export default function HomePage() {
                   />
                   <div className="absolute top-3 right-3">
                     <Badge variant="warning" className="bg-white/95 dark:bg-neutral-900/95 font-bold shadow-xs">
-                      ★ {venue.rating} ({venue.review_count})
+                      {isLoadingRatings && !summaries[venue.id]
+                        ? 'Đang tải đánh giá...'
+                        : summaries[venue.id]
+                          ? `★ ${summaries[venue.id].averageRating.toFixed(1)} (${summaries[venue.id].totalReviews})`
+                          : 'Chưa tải được đánh giá'}
                     </Badge>
                   </div>
                 </div>

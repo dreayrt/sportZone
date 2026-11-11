@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Award, Gift, History, RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
+import { AlertCircle, Award, Check, Copy, Gift, History, RefreshCw, Sparkles, Ticket, TrendingUp, X } from 'lucide-react';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -47,6 +47,19 @@ export default function CustomerLoyaltyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Đổi thưởng modal state
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [selectedPoints, setSelectedPoints] = useState<number>(50);
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState('');
+  const [redeemedVoucher, setRedeemedVoucher] = useState<{
+    code: string;
+    name: string;
+    discount_value: number;
+    ends_at: string;
+  } | null>(null);
+  const [hasCopiedCode, setHasCopiedCode] = useState(false);
+
   const loadLoyaltyData = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -70,6 +83,44 @@ export default function CustomerLoyaltyPage() {
   useEffect(() => {
     void loadLoyaltyData();
   }, [loadLoyaltyData]);
+
+  const handleStartRedeem = () => {
+    setRedeemError('');
+    setRedeemedVoucher(null);
+    setHasCopiedCode(false);
+    setSelectedPoints(50);
+    setIsRedeemModalOpen(true);
+  };
+
+  const handleExecuteRedeem = async () => {
+    setIsRedeeming(true);
+    setRedeemError('');
+    try {
+      const response = await api.loyalty.redeem(selectedPoints);
+      if (response.success && response.data?.voucher) {
+        setRedeemedVoucher(response.data.voucher);
+        // Refresh balance and transaction list
+        void loadLoyaltyData();
+      } else {
+        setRedeemError(response.message || 'Không thể đổi điểm thưởng lúc này.');
+      }
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      setRedeemError(errorObj?.message || 'Có lỗi xảy ra khi đổi điểm.');
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
+  const handleCopyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setHasCopiedCode(true);
+      setTimeout(() => setHasCopiedCode(false), 2500);
+    } catch {
+      // ignore
+    }
+  };
 
   const description = summary
     ? `Mỗi ${summary.earning_rule.amount_vnd.toLocaleString('vi-VN')}đ chi tiêu nhận ${summary.earning_rule.points} điểm thưởng SportZone.`
@@ -173,7 +224,13 @@ export default function CustomerLoyaltyPage() {
                       {summary.redemption.reason}
                     </p>
                   </div>
-                  <Button className="w-full" disabled={!summary.redemption.enabled}>
+                  <Button
+                    className="w-full gap-2"
+                    variant="primary"
+                    disabled={!summary.redemption.enabled || summary.current_points < 50}
+                    onClick={handleStartRedeem}
+                  >
+                    <Ticket className="h-4 w-4" />
                     Chọn phần thưởng
                   </Button>
                 </CardContent>
@@ -226,6 +283,163 @@ export default function CustomerLoyaltyPage() {
             </div>
           </>
         ) : null}
+
+        {/* Modal Đổi Điểm Thưởng */}
+        {isRedeemModalOpen && summary && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+            <div className="relative w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl dark:border-neutral-800 dark:bg-neutral-900">
+              <button
+                type="button"
+                onClick={() => setIsRedeemModalOpen(false)}
+                className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sport-50 text-sport-600 dark:bg-sport-950/60 dark:text-sport-400">
+                  <Gift className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-neutral-900 dark:text-white">Đổi Điểm Lấy Voucher</h3>
+                  <p className="text-xs text-neutral-500">Số dư hiện tại: <strong className="text-sport-600 dark:text-sport-400">{summary.current_points.toLocaleString('vi-VN')} điểm</strong></p>
+                </div>
+              </div>
+
+              {redeemedVoucher ? (
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center dark:border-emerald-800 dark:bg-emerald-950/50">
+                    <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">🎉 Đổi thưởng thành công!</p>
+                    <p className="mt-1 text-sm font-medium text-emerald-900 dark:text-emerald-100">
+                      Voucher giảm {redeemedVoucher.discount_value.toLocaleString('vi-VN')}đ
+                    </p>
+
+                    <div className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-dashed border-emerald-400 bg-white p-3 dark:border-emerald-600 dark:bg-neutral-900">
+                      <span className="font-mono text-lg font-extrabold tracking-wider text-neutral-900 dark:text-white">
+                        {redeemedVoucher.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(redeemedVoucher.code)}
+                        className="flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                      >
+                        {hasCopiedCode ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Đã chép</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Sao chép</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400">
+                      Mã có hạn sử dụng 30 ngày. Hãy nhập mã này tại bước thanh toán khi đặt sân.
+                    </p>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => {
+                      setIsRedeemModalOpen(false);
+                      setRedeemedVoucher(null);
+                    }}
+                  >
+                    Đóng
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-5 space-y-4">
+                  {redeemError && (
+                    <div className="flex items-center gap-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{redeemError}</span>
+                    </div>
+                  )}
+
+                  <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                    Chọn gói ưu đãi bạn muốn đổi:
+                  </p>
+
+                  <div className="space-y-2">
+                    {[
+                      { points: 50, discount: 25000, label: 'Voucher 25.000đ' },
+                      { points: 100, discount: 50000, label: 'Voucher 50.000đ' },
+                      { points: 200, discount: 100000, label: 'Voucher 100.000đ' },
+                    ].map((pkg) => {
+                      const canAfford = summary.current_points >= pkg.points;
+                      const isSelected = selectedPoints === pkg.points;
+
+                      return (
+                        <div
+                          key={pkg.points}
+                          onClick={() => canAfford && setSelectedPoints(pkg.points)}
+                          className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all ${
+                            !canAfford
+                              ? 'cursor-not-allowed opacity-50 border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/40'
+                              : isSelected
+                                ? 'border-sport-500 bg-sport-50/50 dark:border-sport-500 dark:bg-sport-950/30 ring-2 ring-sport-500/20'
+                                : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${isSelected ? 'bg-sport-600 text-white' : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300'}`}>
+                              <Ticket className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-neutral-900 dark:text-white">{pkg.label}</p>
+                              <p className="text-[11px] text-neutral-500">Giảm trực tiếp khi đặt bất kỳ sân nào</p>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="font-mono text-sm font-extrabold text-sport-600 dark:text-sport-400">
+                              {pkg.points} điểm
+                            </span>
+                            {!canAfford && (
+                              <p className="text-[10px] text-rose-500 font-medium">Chưa đủ điểm</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-6 flex items-center justify-end gap-2.5 pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsRedeemModalOpen(false)}
+                      disabled={isRedeeming}
+                    >
+                      Hủy
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleExecuteRedeem}
+                      disabled={isRedeeming || summary.current_points < selectedPoints}
+                    >
+                      {isRedeeming ? (
+                        <>
+                          <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Đang đổi...
+                        </>
+                      ) : (
+                        `Xác nhận đổi (${selectedPoints} điểm)`
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -216,6 +216,12 @@ export interface LoyaltySummaryData {
   redemption: {
     enabled: boolean;
     reason: string;
+    packages?: Array<{
+      points: number;
+      discount_value: number;
+      label: string;
+      description: string;
+    }>;
   };
 }
 
@@ -281,6 +287,30 @@ export interface AiChatData {
     time_from: string;
     time_to: string;
     sort: string;
+  };
+}
+
+export interface VenueReviewSummaryData {
+  average_rating: number;
+  total_reviews: number;
+  rating_distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+  reviews: Array<{
+    id: number;
+    rating: number;
+    comment: string;
+    status: 'visible' | 'hidden';
+    created_at: string | null;
+    user: {
+      id: number | null;
+      name: string;
+      avatar?: string | null;
+    };
+  }>;
+  pagination: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
   };
 }
 
@@ -467,7 +497,18 @@ export const api = {
       return apiRequest<LoyaltyHistoryData>(`/loyalty/history${qs}`);
     },
     redeem: (points: number) =>
-      apiRequest('/loyalty/redeem', {
+      apiRequest<{
+        voucher: {
+          id: number;
+          code: string;
+          name: string;
+          discount_value: number;
+          discount_type: string;
+          ends_at: string;
+        };
+        remaining_points: number;
+        transaction_id: number;
+      }>('/loyalty/redeem', {
         method: 'POST',
         body: JSON.stringify({ points }),
       }),
@@ -488,7 +529,7 @@ export const api = {
       if (params?.page) searchParams.set('page', String(params.page));
       if (params?.per_page) searchParams.set('per_page', String(params.per_page));
       const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
-      return apiRequest(`/venues/${venueIdOrSlug}/reviews${qs}`);
+      return apiRequest<VenueReviewSummaryData>(`/venues/${venueIdOrSlug}/reviews${qs}`);
     },
     getReviewableBookings: (venueIdOrSlug: string | number) =>
       apiRequest(`/venues/${venueIdOrSlug}/my-reviewable-bookings`),

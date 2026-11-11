@@ -2,20 +2,26 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        $userUnsigned = DB::getDriverName() === 'mysql' && str_contains(strtolower(Schema::getColumnType('users', 'id', true)), 'unsigned');
+        $sportUnsigned = DB::getDriverName() === 'mysql' && str_contains(strtolower(Schema::getColumnType('sport_categories', 'id', true)), 'unsigned');
+        $venueUnsigned = DB::getDriverName() === 'mysql' && str_contains(strtolower(Schema::getColumnType('venues', 'id', true)), 'unsigned');
+        $courtUnsigned = DB::getDriverName() === 'mysql' && str_contains(strtolower(Schema::getColumnType('courts', 'id', true)), 'unsigned');
+
         // 1. match_posts (Bài đăng tìm đối / ghép kèo thể thao)
         if (! Schema::hasTable('match_posts')) {
-            Schema::create('match_posts', function (Blueprint $table) {
+            Schema::create('match_posts', function (Blueprint $table) use ($userUnsigned, $sportUnsigned, $venueUnsigned, $courtUnsigned) {
                 $table->increments('id');
-                $table->unsignedInteger('user_id')->comment('Người tạo bài đăng');
-                $table->unsignedInteger('sport_category_id')->comment('Môn thể thao');
-                $table->unsignedInteger('venue_id')->nullable()->comment('Cơ sở sân (nếu có)');
-                $table->unsignedInteger('court_id')->nullable()->comment('Sân cụ thể (nếu có)');
+                $table->integer('user_id', false, $userUnsigned)->comment('Người tạo bài đăng');
+                $table->integer('sport_category_id', false, $sportUnsigned)->comment('Môn thể thao');
+                $table->integer('venue_id', false, $venueUnsigned)->nullable()->comment('Cơ sở sân (nếu có)');
+                $table->integer('court_id', false, $courtUnsigned)->nullable()->comment('Sân cụ thể (nếu có)');
 
                 $table->string('title', 200)->comment('Tiêu đề bài đăng');
                 $table->text('description')->nullable()->comment('Chi tiết yêu cầu, lưu ý');
@@ -52,10 +58,10 @@ return new class extends Migration
 
         // 2. match_members (Thành viên đăng ký tham gia kèo)
         if (! Schema::hasTable('match_members')) {
-            Schema::create('match_members', function (Blueprint $table) {
+            Schema::create('match_members', function (Blueprint $table) use ($userUnsigned) {
                 $table->increments('id');
                 $table->unsignedInteger('match_post_id');
-                $table->unsignedInteger('user_id');
+                $table->integer('user_id', false, $userUnsigned);
                 $table->string('message', 255)->nullable()->comment('Lời nhắn khi xin vào kèo');
 
                 $table->enum('status', ['pending', 'accepted', 'rejected', 'left'])
