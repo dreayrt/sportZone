@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Court;
 use App\Models\Notification;
 use App\Models\SportCategory;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Venue;
 use Carbon\CarbonImmutable;
@@ -19,6 +20,19 @@ use Tests\TestCase;
 class SendBookingRemindersTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_reminder_window_uses_saved_system_setting(): void
+    {
+        $this->travelTo('2026-10-13 10:00:00');
+        SystemSetting::updateOrCreate(['setting_key' => 'reminder_before_minutes'], ['setting_value' => '30']);
+        $near = $this->createBooking($this->createUser(), 'confirmed', CarbonImmutable::parse('2026-10-13 10:25:00', config('app.timezone')));
+        $later = $this->createBooking($this->createUser(), 'confirmed', CarbonImmutable::parse('2026-10-13 10:55:00', config('app.timezone')));
+
+        $this->artisan('sportzone:send-reminders')->assertSuccessful();
+
+        $this->assertDatabaseHas('notifications', ['reference_id' => $near->id, 'type' => 'booking_reminder', 'scheduled_at' => '2026-10-13 09:55:00']);
+        $this->assertDatabaseMissing('notifications', ['reference_id' => $later->id, 'type' => 'booking_reminder']);
+    }
 
     public function test_booking_starting_within_sixty_minutes_creates_correct_unread_reminder(): void
     {

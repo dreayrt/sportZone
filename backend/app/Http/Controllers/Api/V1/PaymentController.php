@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BaseController;
 use App\Models\Booking;
 use App\Models\BookingStatusHistory;
 use App\Models\Payment;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Services\SePayQrService;
 use Illuminate\Database\QueryException;
@@ -217,7 +218,7 @@ class PaymentController extends BaseController
             ], 422);
         }
 
-        $configuredAccountNo = preg_replace('/\D+/', '', (string) config('services.sepay.account_no', ''));
+        $configuredAccountNo = preg_replace('/\D+/', '', (string) SystemSetting::getVal('sepay_account_no', (string) config('services.sepay.account_no', '')));
         $receivedAccountNo = preg_replace('/\D+/', '', (string) ($payload['accountNumber'] ?? ''));
         if ($configuredAccountNo !== '' && $configuredAccountNo !== $receivedAccountNo) {
             Log::warning('[SePay Webhook] Giao dịch đến sai tài khoản nhận tiền.', [

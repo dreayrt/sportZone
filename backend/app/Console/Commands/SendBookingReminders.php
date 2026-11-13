@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Booking;
 use App\Models\Notification;
+use App\Models\SystemSetting;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -33,7 +34,7 @@ class SendBookingReminders extends Command
     {
         $timezone = (string) config('app.timezone', 'UTC');
         $now = CarbonImmutable::now($timezone);
-        $windowEnd = $now->addMinutes(self::REMINDER_WINDOW_MINUTES);
+        $windowEnd = $now->addMinutes(max(1, (int) SystemSetting::getVal('reminder_before_minutes', (string) self::REMINDER_WINDOW_MINUTES)));
         $scanned = 0;
         $created = 0;
         $skipped = 0;
@@ -162,7 +163,7 @@ class SendBookingReminders extends Command
                 'reference_id' => $booking->id,
                 'channel' => 'in_app',
                 'is_read' => false,
-                'scheduled_at' => $startsAt->subMinutes(self::REMINDER_WINDOW_MINUTES),
+                'scheduled_at' => $startsAt->subMinutes((int) $now->diffInMinutes($windowEnd)),
                 'sent_at' => $now,
             ]);
 

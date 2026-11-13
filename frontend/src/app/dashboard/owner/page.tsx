@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   BarChart3,
@@ -12,28 +12,34 @@ import {
   Plus,
   RefreshCw,
   Trophy,
-} from 'lucide-react';
-import { AnalyticsBarChart } from '@/components/dashboard/AnalyticsBarChart';
-import { DashboardHeader } from '@/components/layout/DashboardHeader';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { api, type OwnerAnalyticsData } from '@/lib/api';
-import { formatVND } from '@/lib/utils';
+} from "lucide-react";
+import { AnalyticsBarChart } from "@/components/dashboard/AnalyticsBarChart";
+import { DashboardHeader } from "@/components/layout/DashboardHeader";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { api, type OwnerAnalyticsData } from "@/lib/api";
+import { formatVND } from "@/lib/utils";
+import { useOwnerVenue } from "@/context/OwnerVenueContext";
 
 const bookingStatusLabels: Array<{
-  key: keyof OwnerAnalyticsData['booking_statistics'];
+  key: keyof OwnerAnalyticsData["booking_statistics"];
   label: string;
   color: string;
 }> = [
-  { key: 'total', label: 'Tổng đơn', color: 'text-neutral-900 dark:text-white' },
-  { key: 'pending', label: 'Chờ xác nhận', color: 'text-amber-600' },
-  { key: 'confirmed', label: 'Đã xác nhận', color: 'text-sky-600' },
-  { key: 'completed', label: 'Hoàn thành', color: 'text-emerald-600' },
-  { key: 'cancelled', label: 'Đã hủy', color: 'text-rose-600' },
-  { key: 'no_show', label: 'Không đến', color: 'text-neutral-500' },
+  {
+    key: "total",
+    label: "Tổng đơn",
+    color: "text-neutral-900 dark:text-white",
+  },
+  { key: "pending", label: "Chờ thanh toán", color: "text-amber-600" },
+  { key: "confirmed", label: "Đơn còn hiệu lực", color: "text-sky-600" },
+  { key: "completed", label: "Hoàn thành", color: "text-emerald-600" },
+  { key: "cancelled", label: "Đã hủy", color: "text-rose-600" },
+  { key: "no_show", label: "Không đến", color: "text-neutral-500" },
 ];
 
 export default function OwnerDashboardPage() {
+  const { venueId } = useOwnerVenue();
   const [analytics, setAnalytics] = useState<OwnerAnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,17 +48,17 @@ export default function OwnerDashboardPage() {
     setIsLoading(true);
     setError(null);
 
-    const response = await api.analytics.getOwnerAnalytics();
+    const response = await api.analytics.getOwnerAnalytics(venueId);
 
     if (response.success && response.data) {
       setAnalytics(response.data);
     } else {
       setAnalytics(null);
-      setError(response.message || 'Không thể tải dữ liệu thống kê.');
+      setError(response.message || "Không thể tải dữ liệu thống kê.");
     }
 
     setIsLoading(false);
-  }, []);
+  }, [venueId]);
 
   useEffect(() => {
     void loadAnalytics();
@@ -62,7 +68,7 @@ export default function OwnerDashboardPage() {
     <div>
       <DashboardHeader
         title="Tổng Quan Quản Lý Cơ Sở"
-        description="Doanh thu và hiệu suất đặt sân trên toàn bộ cơ sở thuộc tài khoản của bạn."
+        description="Doanh thu và hiệu suất đặt sân của cơ sở đang chọn."
         actions={
           <div className="flex items-center gap-2">
             <Link href="/dashboard/owner/calendar">
@@ -94,12 +100,21 @@ export default function OwnerDashboardPage() {
         {!isLoading && error && (
           <Card>
             <CardContent className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center">
-              <AlertCircle className="h-9 w-9 text-rose-500" strokeWidth={1.5} />
+              <AlertCircle
+                className="h-9 w-9 text-rose-500"
+                strokeWidth={1.5}
+              />
               <div>
-                <p className="font-semibold text-neutral-900 dark:text-white">Không thể tải dashboard</p>
+                <p className="font-semibold text-neutral-900 dark:text-white">
+                  Không thể tải dashboard
+                </p>
                 <p className="mt-1 text-sm text-neutral-500">{error}</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => void loadAnalytics()}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadAnalytics()}
+              >
                 Thử lại
               </Button>
             </CardContent>
@@ -110,10 +125,30 @@ export default function OwnerDashboardPage() {
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { label: 'Doanh thu hôm nay', value: analytics.revenue.today, icon: DollarSign, color: 'text-sport-500' },
-                { label: 'Doanh thu tuần này', value: analytics.revenue.this_week, icon: CalendarCheck, color: 'text-sky-500' },
-                { label: 'Doanh thu tháng này', value: analytics.revenue.this_month, icon: CalendarDays, color: 'text-amber-500' },
-                { label: 'Doanh thu năm nay', value: analytics.revenue.this_year, icon: BarChart3, color: 'text-indigo-500' },
+                {
+                  label: "Doanh thu hôm nay",
+                  value: analytics.revenue.today,
+                  icon: DollarSign,
+                  color: "text-sport-500",
+                },
+                {
+                  label: "Doanh thu tuần này",
+                  value: analytics.revenue.this_week,
+                  icon: CalendarCheck,
+                  color: "text-sky-500",
+                },
+                {
+                  label: "Doanh thu tháng này",
+                  value: analytics.revenue.this_month,
+                  icon: CalendarDays,
+                  color: "text-amber-500",
+                },
+                {
+                  label: "Doanh thu năm nay",
+                  value: analytics.revenue.this_year,
+                  icon: BarChart3,
+                  color: "text-indigo-500",
+                },
               ].map(({ label, value, icon: Icon, color }) => (
                 <Card key={label}>
                   <CardContent className="p-4">
@@ -121,10 +156,12 @@ export default function OwnerDashboardPage() {
                       <span>{label}</span>
                       <Icon className={`h-4 w-4 ${color}`} strokeWidth={1.5} />
                     </div>
-                    <div className="font-mono text-2xl font-bold text-neutral-900 dark:text-white">
+                    <div className="font-sans text-2xl font-bold tabular-nums tracking-tight text-neutral-900 dark:text-white">
                       {formatVND(value)}
                     </div>
-                    <p className="mt-1 text-xs text-neutral-400">Chỉ tính giao dịch đã thanh toán</p>
+                    <p className="mt-1 text-xs text-neutral-400">
+                      Chỉ tính giao dịch đã thanh toán
+                    </p>
                   </CardContent>
                 </Card>
               ))}
@@ -158,9 +195,15 @@ export default function OwnerDashboardPage() {
                       key={status.key}
                       className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2.5 dark:bg-neutral-900"
                     >
-                      <span className="text-sm text-neutral-500">{status.label}</span>
-                      <span className={`font-mono text-sm font-bold ${status.color}`}>
-                        {analytics.booking_statistics[status.key].toLocaleString('vi-VN')}
+                      <span className="text-sm text-neutral-500">
+                        {status.label}
+                      </span>
+                      <span
+                        className={`font-sans text-sm font-semibold tabular-nums ${status.color}`}
+                      >
+                        {analytics.booking_statistics[
+                          status.key
+                        ].toLocaleString("vi-VN")}
                       </span>
                     </div>
                   ))}
@@ -195,12 +238,18 @@ export default function OwnerDashboardPage() {
                         {analytics.top_courts.map((court, index) => (
                           <tr key={court.court_id}>
                             <td className="px-5 py-3.5 font-semibold text-neutral-900 dark:text-white">
-                              <span className="mr-2 font-mono text-xs text-amber-500">#{index + 1}</span>
+                              <span className="mr-2 font-mono text-xs text-amber-500">
+                                #{index + 1}
+                              </span>
                               {court.court_name}
                             </td>
-                            <td className="px-5 py-3.5 text-neutral-500">{court.venue_name}</td>
-                            <td className="px-5 py-3.5 text-right font-mono font-semibold">{court.total_bookings}</td>
-                            <td className="px-5 py-3.5 text-right font-mono font-semibold text-sport-600">
+                            <td className="px-5 py-3.5 text-neutral-500">
+                              {court.venue_name}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-sans font-semibold tabular-nums">
+                              {court.total_bookings}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-sans font-semibold tabular-nums text-sport-600">
                               {formatVND(court.revenue)}
                             </td>
                           </tr>
@@ -226,18 +275,25 @@ export default function OwnerDashboardPage() {
                   ) : (
                     <div className="space-y-3">
                       {analytics.peak_hours.map((slot) => {
-                        const maxBookings = analytics.peak_hours[0]?.booking_count || 1;
+                        const maxBookings =
+                          analytics.peak_hours[0]?.booking_count || 1;
 
                         return (
                           <div key={slot.hour}>
                             <div className="mb-1.5 flex items-center justify-between text-xs">
-                              <span className="font-medium text-neutral-700 dark:text-neutral-300">{slot.label}</span>
-                              <span className="font-mono text-neutral-500">{slot.booking_count} lượt</span>
+                              <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                                {slot.label}
+                              </span>
+                              <span className="font-sans tabular-nums text-neutral-500">
+                                {slot.booking_count} lượt
+                              </span>
                             </div>
                             <div className="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800">
                               <div
                                 className="h-2 rounded-full bg-sky-500"
-                                style={{ width: `${(slot.booking_count / maxBookings) * 100}%` }}
+                                style={{
+                                  width: `${(slot.booking_count / maxBookings) * 100}%`,
+                                }}
                               />
                             </div>
                           </div>

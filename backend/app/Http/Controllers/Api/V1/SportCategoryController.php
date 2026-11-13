@@ -3,12 +3,21 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Models\MatchPost;
 use App\Models\SportCategory;
+use App\Services\VenueDirectory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SportCategoryController extends BaseController
 {
+    public function __construct(private VenueDirectory $directory) {}
+
+    public function adminIndex(): JsonResponse
+    {
+        return $this->successResponse(SportCategory::withCount(['courts', 'courts as active_courts_count' => fn ($q) => $q->where('status', 'active')])->orderBy('sort_order')->orderBy('id')->get());
+    }
+
     /**
      * Danh sách tất cả các môn thể thao đang hoạt động
      */
@@ -30,7 +39,7 @@ class SportCategoryController extends BaseController
             ? SportCategory::find($idOrCode)
             : SportCategory::where('code', $idOrCode)->first();
 
-        if (!$category) {
+        if (! $category) {
             return $this->notFound('Không tìm thấy môn thể thao yêu cầu.');
         }
 
@@ -46,12 +55,13 @@ class SportCategoryController extends BaseController
             'code' => ['required', 'string', 'max:30', 'unique:sport_categories,code'],
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
-            'banner_image' => ['nullable', 'string', 'max:500'],
-            'sort_order' => ['nullable', 'integer'],
+            'banner_image' => ['nullable', 'url', 'max:500'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
         $category = SportCategory::create($validated);
+        $this->directory->invalidate();
 
         return $this->successResponse($category, 'Tạo danh mục môn thể thao thành công.', 201);
     }
@@ -63,20 +73,21 @@ class SportCategoryController extends BaseController
     {
         $category = SportCategory::find($id);
 
-        if (!$category) {
+        if (! $category) {
             return $this->notFound('Không tìm thấy môn thể thao yêu cầu.');
         }
 
         $validated = $request->validate([
-            'code' => ['sometimes', 'string', 'max:30', 'unique:sport_categories,code,' . $id],
+            'code' => ['sometimes', 'string', 'max:30', 'unique:sport_categories,code,'.$id],
             'name' => ['sometimes', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
-            'banner_image' => ['nullable', 'string', 'max:500'],
-            'sort_order' => ['nullable', 'integer'],
+            'banner_image' => ['nullable', 'url', 'max:500'],
+            'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
         $category->update($validated);
+        $this->directory->invalidate();
 
         return $this->successResponse($category, 'Cập nhật danh mục thể thao thành công.');
     }
@@ -88,11 +99,18 @@ class SportCategoryController extends BaseController
     {
         $category = SportCategory::find($id);
 
-        if (!$category) {
+        if (! $category) {
             return $this->notFound('Không tìm thấy môn thể thao yêu cầu.');
         }
 
+        if ($category->courts()->exists() || MatchPost::where('sport_category_id', $id)->exists() || $category->searchHistories()->exists()) {
+            $category->update(['is_active' => false]);
+            $this->directory->invalidate();
+
+            return $this->successResponse($category, 'Danh mục đã có dữ liệu liên quan, đã chuyển sang tạm ngưng.');
+        }
         $category->delete();
+        $this->directory->invalidate();
 
         return $this->successResponse(null, 'Đã xóa danh mục thể thao thành công.');
     }

@@ -215,6 +215,53 @@ class ReviewController extends BaseController
     }
 
     /**
+     * Quản lý danh sách đánh giá toàn sàn (Admin)
+     * GET /api/v1/admin/reviews
+     */
+    public function adminIndex(Request $request): JsonResponse
+    {
+        $request->validate([
+            'keyword' => 'nullable|string|max:150',
+            'status' => 'nullable|in:visible,hidden',
+            'rating' => 'nullable|integer|between:1,5',
+            'venue_id' => 'nullable|integer',
+            'per_page' => 'nullable|integer|between:1,100',
+        ]);
+
+        $query = Review::with([
+            'user:id,full_name,email,avatar',
+            'venue:id,name,address,city,district',
+            'booking:id,booking_code',
+        ]);
+
+        if ($venueId = $request->input('venue_id')) {
+            $query->where('venue_id', $venueId);
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($rating = $request->input('rating')) {
+            $query->where('rating', (int) $rating);
+        }
+
+        if ($keyword = $request->input('keyword')) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('comment', 'like', "%{$keyword}%")
+                    ->orWhere('customer_name', 'like', "%{$keyword}%")
+                    ->orWhereHas('user', fn ($uq) => $uq->where('full_name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('venue', fn ($vq) => $vq->where('name', 'like', "%{$keyword}%"));
+            });
+        }
+
+        $reviews = $query->orderByDesc('id')
+            ->paginate($request->integer('per_page', 15));
+
+        return $this->successResponse($reviews, 'Lấy danh sách đánh giá thành công.');
+    }
+
+    /**
      * Admin kiểm duyệt ẩn/hiện đánh giá
      * PUT /api/v1/admin/reviews/{id}/status
      */

@@ -154,7 +154,9 @@ export default function BookingWizardPage() {
 
     setIsVoucherValidating(true);
     setVoucherMessage('');
-    const response = await api.vouchers.validate(code, subtotal);
+    const targetVenueId = selectedVenue?.id ? Number(selectedVenue.id) : undefined;
+    const targetCourtId = Number(courtId) || undefined;
+    const response = await api.vouchers.validate(code, subtotal, targetVenueId, targetCourtId);
     if (response.success && response.data?.valid) {
       setAppliedVoucherCode(response.data.voucher.code);
       setVoucherCode(response.data.voucher.code);

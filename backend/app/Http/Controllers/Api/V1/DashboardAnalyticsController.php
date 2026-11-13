@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Api\BaseController;
+use App\Models\Venue;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -16,16 +17,21 @@ class DashboardAnalyticsController extends BaseController
 
     public function owner(Request $request): JsonResponse
     {
+        $request->validate(['venue_id' => 'nullable|integer|exists:venues,id']);
+        $venueId = $request->filled('venue_id') ? $request->integer('venue_id') : null;
+        if ($venueId !== null && ! Venue::whereKey($venueId)->where('owner_id', $request->user()->id)->exists()) {
+            return $this->forbidden('Bạn chỉ có thể xem thống kê cơ sở của mình.');
+        }
         try {
             $ownerId = (int) $request->user()->id;
             $now = now();
 
             $data = [
-                'revenue' => $this->revenueSummary($this->paidRevenueQuery($ownerId), $now),
-                'booking_statistics' => $this->bookingStatistics($ownerId),
-                'revenue_chart' => $this->sevenDayRevenueChart($this->paidRevenueQuery($ownerId), $now),
-                'top_courts' => $this->topCourts($ownerId),
-                'peak_hours' => $this->peakHours($ownerId),
+                'revenue' => $this->revenueSummary($this->paidRevenueQuery($ownerId, $venueId), $now),
+                'booking_statistics' => $this->bookingStatistics($ownerId, $venueId),
+                'revenue_chart' => $this->sevenDayRevenueChart($this->paidRevenueQuery($ownerId, $venueId), $now),
+                'top_courts' => $this->topCourts($ownerId, $venueId),
+                'peak_hours' => $this->peakHours($ownerId, $venueId),
             ];
 
             return $this->successResponse($data, 'Lấy thống kê chủ sân thành công.');
@@ -70,7 +76,7 @@ class DashboardAnalyticsController extends BaseController
         }
     }
 
-    private function paidRevenueQuery(?int $ownerId = null): Builder
+    private function paidRevenueQuery(?int $ownerId = null, ?int $venueId = null): Builder
     {
         $query = DB::table('payments')
             ->join('bookings', 'bookings.id', '=', 'payments.booking_id')
@@ -83,7 +89,7 @@ class DashboardAnalyticsController extends BaseController
                 ->where('venues.owner_id', $ownerId);
         }
 
-        return $query;
+        return $query->when($venueId !== null, fn (Builder $q) => $q->where('bookings.venue_id', $venueId));
     }
 
     /**
@@ -121,8 +127,11 @@ class DashboardAnalyticsController extends BaseController
     /**
      * @return array{total: int, pending: int, confirmed: int, completed: int, cancelled: int, no_show: int}
      */
-    private function bookingStatistics(?int $ownerId = null): array
+    private function bookingStatistics(?int $ownerId = null, ?int $venueId = null): array
     {
+        // Tự động quét cập nhật các đơn hết giờ thi đấu: chưa check-in -> no_show, đã check-in & thanh toán -> completed
+        app(\App\Services\BookingService::class)->autoFinalizeExpiredBookings($ownerId, $venueId);
+
         $query = DB::table('bookings')
             ->select('bookings.status', DB::raw('COUNT(*) as total'));
 
@@ -132,6 +141,7 @@ class DashboardAnalyticsController extends BaseController
         }
 
         $counts = $query
+            ->when($venueId !== null, fn (Builder $q) => $q->where('bookings.venue_id', $venueId))
             ->groupBy('bookings.status')
             ->pluck('total', 'bookings.status');
 
@@ -176,7 +186,7 @@ class DashboardAnalyticsController extends BaseController
     /**
      * @return list<array{court_id: int, court_name: string, venue_name: string, total_bookings: int, revenue: int}>
      */
-    private function topCourts(int $ownerId): array
+    private function topCourts(int $ownerId, ?int $venueId = null): array
     {
         $paidByBooking = DB::table('payments')
             ->select('booking_id', DB::raw('SUM(amount) as paid_revenue'))
@@ -191,6 +201,7 @@ class DashboardAnalyticsController extends BaseController
                 $join->on('paid_by_booking.booking_id', '=', 'bookings.id');
             })
             ->where('venues.owner_id', $ownerId)
+            ->when($venueId !== null, fn (Builder $q) => $q->where('bookings.venue_id', $venueId))
             ->where('bookings.status', '!=', 'cancelled')
             ->select([
                 'courts.id as court_id',
@@ -217,14 +228,15 @@ class DashboardAnalyticsController extends BaseController
     /**
      * @return list<array{hour: int, label: string, booking_count: int}>
      */
-    private function peakHours(int $ownerId): array
+    private function peakHours(int $ownerId, ?int $venueId = null): array
     {
         return DB::table('bookings')
             ->join('venues', 'venues.id', '=', 'bookings.venue_id')
             ->where('venues.owner_id', $ownerId)
+            ->when($venueId !== null, fn (Builder $q) => $q->where('bookings.venue_id', $venueId))
             ->where('bookings.status', '!=', 'cancelled')
-            ->selectRaw('HOUR(bookings.start_time) as booking_hour, COUNT(*) as booking_count')
-            ->groupByRaw('HOUR(bookings.start_time)')
+            ->selectRaw('SUBSTR(bookings.start_time, 1, 2) as booking_hour, COUNT(*) as booking_count')
+            ->groupByRaw('SUBSTR(bookings.start_time, 1, 2)')
             ->orderByDesc('booking_count')
             ->orderBy('booking_hour')
             ->limit(5)

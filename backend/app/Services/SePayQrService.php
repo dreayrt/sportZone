@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\SystemSetting;
+
 class SePayQrService
 {
     /**
@@ -14,9 +16,9 @@ class SePayQrService
         ?string $accountNo = null,
         ?string $accountName = null
     ): array {
-        $bankName = $bank ?: config('services.sepay.bank_name', 'MBBank');
-        $accNo = $accountNo ?: config('services.sepay.account_no', '');
-        $accName = $accountName ?: config('services.sepay.account_name', 'SPORTZONE');
+        $bankName = $bank ?: SystemSetting::getVal('sepay_bank_name', (string) config('services.sepay.bank_name', 'MBBank'));
+        $accNo = $accountNo ?: SystemSetting::getVal('sepay_account_no', (string) config('services.sepay.account_no', ''));
+        $accName = $accountName ?: SystemSetting::getVal('sepay_account_name', (string) config('services.sepay.account_name', 'SPORTZONE'));
 
         // Mã hóa thông tin URL
         $encodedDescription = urlencode(trim($description));

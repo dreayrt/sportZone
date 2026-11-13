@@ -220,7 +220,7 @@ export default function CustomerDashboardPage() {
                     </td>
                     <td className="py-3.5 px-5">
                       <Badge variant={booking.status === 'confirmed' ? 'sport' : 'neutral'}>
-                        {booking.status === 'confirmed' ? 'Đã xác nhận' : 'Hoàn thành'}
+                        {booking.status === 'confirmed' ? 'Sắp diễn ra' : 'Hoàn thành'}
                       </Badge>
                     </td>
                     <td className="py-3.5 px-5 text-right">

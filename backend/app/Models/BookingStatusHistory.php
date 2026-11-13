@@ -12,7 +12,7 @@ class BookingStatusHistory extends Model
 
     protected $table = 'booking_status_history';
 
-    public $timestamps = false;
+    public const UPDATED_AT = null;
 
     protected $fillable = [
         'booking_id',

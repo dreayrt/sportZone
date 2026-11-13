@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -39,8 +39,15 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search).get('search');
+    if (query) setSearch(query.slice(0, 150));
+  }, []);
 
   const fetchUsers = useCallback(async (params: { search: string; role: string; status: string; page: number }) => {
+    const id = ++requestId.current;
     setIsLoading(true);
     try {
       const res = await api.admin.users.list({
@@ -50,6 +57,7 @@ export default function AdminUsersPage() {
         page: params.page,
         per_page: PER_PAGE,
       });
+      if (id !== requestId.current) return;
       if (res.success && res.data) {
         setUsers(res.data.data || []);
         setMeta({
@@ -62,9 +70,9 @@ export default function AdminUsersPage() {
         setNotice({ type: 'error', text: res.message || 'Không tải được danh sách người dùng.' });
       }
     } catch {
-      setNotice({ type: 'error', text: 'Không thể kết nối đến máy chủ backend.' });
+      if (id === requestId.current) setNotice({ type: 'error', text: 'Không thể kết nối đến máy chủ backend.' });
     } finally {
-      setIsLoading(false);
+      if (id === requestId.current) setIsLoading(false);
     }
   }, []);
 
@@ -77,7 +85,7 @@ export default function AdminUsersPage() {
     const t = setTimeout(() => {
       fetchUsers({ search, role: roleFilter, status: statusFilter, page });
     }, search ? 400 : 0);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); requestId.current++; };
   }, [search, roleFilter, statusFilter, page, fetchUsers]);
 
   const reload = () => fetchUsers({ search, role: roleFilter, status: statusFilter, page });

@@ -46,6 +46,7 @@ class Venue extends Model
             'review_count' => 'integer',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            'admin_suspended_at' => 'datetime',
         ];
     }
 
@@ -72,5 +73,10 @@ class Venue extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class, 'venue_id');
+    }
+
+    public function vouchers(): HasMany
+    {
+        return $this->hasMany(Voucher::class, 'venue_id');
     }
 }

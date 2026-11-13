@@ -176,7 +176,7 @@ PROMPT;
             ])
             ->where('status', 'active')
             ->where('sport_category_id', $sport->id)
-            ->whereHas('venue', fn ($query) => $query->where('status', 'active'))
+            ->whereHas('venue', fn ($query) => $query->where('status', 'active')->whereNull('admin_suspended_at'))
             ->with([
                 'venue:id,name,slug,address,district,city,open_time,close_time,rating,status',
                 'sportCategory:id,code,name',

@@ -9,6 +9,8 @@ export interface ApiResponse<T = any> {
 
 export interface VoucherItem {
   id: number;
+  venue_id?: number | null;
+  venue?: { id: number; name: string; address?: string };
   code: string;
   name: string;
   discount_type: 'fixed' | 'percent';
@@ -20,6 +22,21 @@ export interface VoucherItem {
   starts_at: string;
   ends_at: string;
   status: 'active' | 'inactive';
+}
+
+export interface AdminReviewItem {
+  id: number;
+  venue_id: number;
+  user_id: number;
+  booking_id: number | null;
+  customer_name: string;
+  rating: number;
+  comment: string;
+  status: 'visible' | 'hidden';
+  created_at: string;
+  user?: { id: number; full_name: string; email: string | null; avatar?: string | null };
+  venue?: { id: number; name: string; address?: string; city?: string; district?: string };
+  booking?: { id: number; booking_code: string };
 }
 
 export interface MatchPostItem {
@@ -422,13 +439,36 @@ export const api = {
     },
   },
 
+  owner: {
+    vouchers: {
+      list: (params?: { venue_id?: number; keyword?: string; status?: string; discount_type?: string; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.venue_id) query.set('venue_id', String(params.venue_id));
+        if (params?.keyword) query.set('keyword', params.keyword);
+        if (params?.status) query.set('status', params.status);
+        if (params?.discount_type) query.set('discount_type', params.discount_type);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.per_page) query.set('per_page', String(params.per_page));
+        const qs = query.toString();
+        return apiRequest<PaginatedData<VoucherItem>>(`/owner/vouchers${qs ? `?${qs}` : ''}`);
+      },
+      create: (body: Partial<VoucherItem> & { venue_id: number }) =>
+        apiRequest<VoucherItem>('/owner/vouchers', { method: 'POST', body: JSON.stringify(body) }),
+      update: (id: number, body: Partial<VoucherItem>) =>
+        apiRequest<VoucherItem>(`/owner/vouchers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+      delete: (id: number) =>
+        apiRequest(`/owner/vouchers/${id}`, { method: 'DELETE' }),
+    },
+  },
+
   admin: {
     vouchers: {
-      list: (params?: { keyword?: string; status?: string; discount_type?: string; page?: number; per_page?: number }) => {
+      list: (params?: { keyword?: string; status?: string; discount_type?: string; venue_id?: string | number; page?: number; per_page?: number }) => {
         const query = new URLSearchParams();
         if (params?.keyword) query.set('keyword', params.keyword);
         if (params?.status) query.set('status', params.status);
         if (params?.discount_type) query.set('discount_type', params.discount_type);
+        if (params?.venue_id) query.set('venue_id', String(params.venue_id));
         if (params?.page) query.set('page', String(params.page));
         if (params?.per_page) query.set('per_page', String(params.per_page));
         const qs = query.toString();
@@ -457,6 +497,42 @@ export const api = {
       updateRole: (id: number, role: string) =>
         apiRequest(`/admin/users/${id}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
     },
+    reviews: {
+      list: (params?: { keyword?: string; status?: string; rating?: number; venue_id?: number; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.keyword) query.set('keyword', params.keyword);
+        if (params?.status) query.set('status', params.status);
+        if (params?.rating) query.set('rating', String(params.rating));
+        if (params?.venue_id) query.set('venue_id', String(params.venue_id));
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.per_page) query.set('per_page', String(params.per_page));
+        const qs = query.toString();
+        return apiRequest<PaginatedData<AdminReviewItem>>(`/admin/reviews${qs ? `?${qs}` : ''}`);
+      },
+      updateStatus: (id: number, status: 'visible' | 'hidden') =>
+        apiRequest(`/admin/reviews/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+    },
+    bookings: {
+      list: (params?: { search?: string; date?: string; venue_id?: number; status?: string; payment_status?: string; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        if (params?.search) query.set('search', params.search);
+        if (params?.date) query.set('date', params.date);
+        if (params?.venue_id) query.set('venue_id', String(params.venue_id));
+        if (params?.status) query.set('status', params.status);
+        if (params?.payment_status) query.set('payment_status', params.payment_status);
+        if (params?.page) query.set('page', String(params.page));
+        if (params?.per_page) query.set('per_page', String(params.per_page));
+        const qs = query.toString();
+        return apiRequest<PaginatedData<any>>(`/admin/bookings${qs ? `?${qs}` : ''}`);
+      },
+    },
+    calendar: (params?: { venue_id?: number | string; date?: string }) => {
+      const query = new URLSearchParams();
+      if (params?.venue_id) query.set('venue_id', String(params.venue_id));
+      if (params?.date) query.set('date', params.date);
+      const qs = query.toString();
+      return apiRequest<any>(`/admin/calendar${qs ? `?${qs}` : ''}`);
+    },
   },
 
   notifications: {
@@ -474,7 +550,7 @@ export const api = {
   },
 
   analytics: {
-    getOwnerAnalytics: () => apiRequest<OwnerAnalyticsData>('/owner/analytics'),
+    getOwnerAnalytics: (venueId?: string) => apiRequest<OwnerAnalyticsData>(`/owner/analytics${venueId ? `?venue_id=${encodeURIComponent(venueId)}` : ''}`),
     getAdminAnalytics: () => apiRequest<AdminAnalyticsData>('/admin/analytics'),
   },
 
@@ -582,18 +658,26 @@ export const api = {
   },
 
   vouchers: {
-    validate: (code: string, totalAmount: number) =>
+    validate: (code: string, totalAmount: number, venueId?: number, courtId?: number) =>
       apiRequest<{
         valid: boolean;
-        voucher: Pick<VoucherItem, 'id' | 'code' | 'name' | 'discount_type' | 'discount_value' | 'max_discount' | 'min_order_value'>;
+        voucher: Pick<VoucherItem, 'id' | 'code' | 'name' | 'discount_type' | 'discount_value' | 'max_discount' | 'min_order_value'> & { venue_id?: number | null; venue?: { id: number; name: string } };
         total_amount: number;
         discount_amount: number;
         final_amount: number;
         message?: string;
       }>('/vouchers/validate', {
         method: 'POST',
-        body: JSON.stringify({ code, total_amount: totalAmount }),
+        body: JSON.stringify({ code, total_amount: totalAmount, venue_id: venueId, court_id: courtId }),
       }),
+    list: (params?: { venue_id?: number; court_id?: number; order_amount?: number }) => {
+      const query = new URLSearchParams();
+      if (params?.venue_id) query.set('venue_id', String(params.venue_id));
+      if (params?.court_id) query.set('court_id', String(params.court_id));
+      if (params?.order_amount) query.set('order_amount', String(params.order_amount));
+      const qs = query.toString();
+      return apiRequest<VoucherItem[]>(`/vouchers${qs ? `?${qs}` : ''}`);
+    },
   },
 
   matches: {
@@ -628,3 +712,29 @@ export const api = {
     },
   }
 };
+
+export async function downloadAdminBookings(filters: Record<string, any> = {}): Promise<void> {
+  const token = getStoredToken();
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') query.set(k, String(v));
+  });
+  const res = await fetch(`${API_BASE_URL}/admin/bookings/export?${query.toString()}`, {
+    headers: {
+      Accept: 'text/csv',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    throw new Error('Không thể xuất báo cáo.');
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `SportZone_Admin_Bookings_${filters.date || 'all'}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

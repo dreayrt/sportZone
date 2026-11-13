@@ -13,7 +13,7 @@ Route::prefix("v1")->group(function () {
         );
         Route::get("search-history", [V::class, "getHistory"]);
         Route::prefix("owner")
-            ->middleware("role:owner")
+            ->middleware("role:owner,admin")
             ->group(function () {
                 Route::get("venues", [V::class, "ownerVenues"]);
                 Route::post("venues", [V::class, "storeVenue"]);

@@ -14,3 +14,6 @@ Schedule::command('sportzone:send-reminders')
     ->withoutOverlapping(10);
 // Tự động quét và hủy đơn đặt sân unpaid quá 30 phút mỗi 15 phút
 \Illuminate\Support\Facades\Schedule::command('bookings:cancel-unpaid --minutes=30')->everyFifteenMinutes();
+
+// Tự động quét và chuyển đơn quá giờ chưa check-in thành Khách không đến (no_show) mỗi 10 phút
+\Illuminate\Support\Facades\Schedule::command('bookings:mark-no-shows')->everyTenMinutes();
