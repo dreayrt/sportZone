@@ -33,7 +33,10 @@ class BookingTest extends TestCase
     public function test_owner_calendar_timeline_can_be_retrieved(): void
     {
         $venue = Venue::first();
-        $response = $this->getJson("/api/v1/owner/calendar?venue_id={$venue->id}&date=" . date('Y-m-d'));
+        $owner = User::find($venue->owner_id);
+
+        $response = $this->actingAs($owner, 'sanctum')
+            ->getJson("/api/v1/owner/calendar?venue_id={$venue->id}&date=" . date('Y-m-d'));
 
         $response->assertStatus(200)
             ->assertJson([

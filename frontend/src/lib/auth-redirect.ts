@@ -14,6 +14,17 @@ export function getDashboardByRole(role: string): string {
   return '/dashboard/customer';
 }
 
+export type DashboardRole = 'customer' | 'owner' | 'admin';
+
+/** Role sở hữu một path /dashboard/*, null nếu path không thuộc khu vực nào. */
+export function getRequiredRoleForPath(path: string): DashboardRole | null {
+  const section = path.split('?')[0].split('/')[2] ?? '';
+  if (section === 'customer' || section === 'owner' || section === 'admin') {
+    return section;
+  }
+  return null;
+}
+
 const PENDING_REDIRECT_KEY = 'sz_post_login_redirect';
 
 export function savePendingRedirect(path: string | null): void {

@@ -54,6 +54,15 @@ return [
         'code_prefix' => env('SEPAY_CODE_PREFIX', 'SZ'),
     ],
 
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+        'verify_url' => env('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/siteverify'),
+        'enabled' => (bool) env('TURNSTILE_ENABLED', true),
+        'login_threshold' => (int) env('TURNSTILE_LOGIN_THRESHOLD', 3),
+        'timeout' => (int) env('TURNSTILE_TIMEOUT', 5),
+    ],
+
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),

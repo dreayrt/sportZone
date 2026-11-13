@@ -159,6 +159,7 @@ class VenueModuleController extends BaseController
         $d["owner_id"] = $r->user()->id;
         $d["code"] = $this->code("VN");
         $d["slug"] = $this->slug($d["name"]);
+        $d["status"] = "pending";
         $venue = Venue::create($d);
         $this->directory->invalidate();
         return $this->successResponse($venue, "Đã tạo cơ sở.", 201);
@@ -166,9 +167,26 @@ class VenueModuleController extends BaseController
     public function updateVenue(Request $r, Venue $venue)
     {
         $this->owned($r, $venue);
-        $venue->update($this->venueData($r));
+        $d = $this->venueData($r);
+
+        if (! $r->user()->isAdmin()) {
+            $d["status"] = in_array($d["status"], ["inactive", "pending"], true)
+                ? $d["status"]
+                : $venue->status;
+        }
+
+        $venue->update($d);
         $this->directory->invalidate();
         return $this->successResponse($venue->fresh(), "Đã lưu cơ sở.");
+    }
+    public function updateVenueStatus(Request $r, Venue $venue)
+    {
+        $d = $r->validate([
+            "status" => ["required", Rule::in(["active", "inactive", "pending"])],
+        ]);
+        $venue->update($d);
+        $this->directory->invalidate();
+        return $this->successResponse($venue->fresh(), "Đã cập nhật trạng thái cơ sở.");
     }
     public function deleteVenue(Request $r, Venue $venue)
     {

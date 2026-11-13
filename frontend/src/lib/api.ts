@@ -353,6 +353,15 @@ export async function apiRequest<T = any>(
       headers,
     });
 
+    if (res.status === 401 && typeof window !== 'undefined') {
+      removeStoredToken();
+
+      const { pathname, search } = window.location;
+      if (pathname.startsWith('/dashboard') && !pathname.startsWith('/auth/')) {
+        window.location.href = `/auth/login?redirect=${encodeURIComponent(pathname + search)}`;
+      }
+    }
+
     const data = await res.json();
     return data;
   } catch (error: any) {
@@ -369,9 +378,17 @@ export const api = {
   health: () => apiRequest('/health'),
   
   auth: {
-    login: (body: { login: string; password: string }) =>
+    login: (body: { login: string; password: string; 'cf-turnstile-response'?: string }) =>
       apiRequest('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-    register: (body: { full_name: string; email?: string; phone: string; password: string; role?: string }) =>
+    register: (body: {
+      full_name: string;
+      email?: string;
+      phone: string;
+      password: string;
+      password_confirmation: string;
+      role?: string;
+      'cf-turnstile-response': string;
+    }) =>
       apiRequest('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
     me: () => apiRequest('/auth/me'),
     logout: () => apiRequest('/auth/logout', { method: 'POST' }),

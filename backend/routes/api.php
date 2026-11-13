@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\ReferralController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\SportCategoryController;
 use App\Http\Controllers\Api\V1\VoucherController;
+use App\Http\Controllers\Api\V1\VenueModuleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,10 +31,10 @@ Route::prefix('v1')->group(function () {
 
     // Public Authentication
     Route::prefix('auth')->group(function () {
-        Route::post('/register', [AuthController::class, 'register']);
-        Route::post('/login', [AuthController::class, 'login']);
-        Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-        Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+        Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+        Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,1');
+        Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
 
         // OAuth2 Social Login
         Route::get('/{provider}/redirect', [AuthController::class, 'redirectToProvider'])
@@ -90,7 +91,6 @@ Route::prefix('v1')->group(function () {
     // Public Court Slots & Calendar Timeline
     Route::get('/courts/{courtId}/slots', [BookingController::class, 'getCourtSlots']);
     Route::get('/venues/{venueId}/timeline', [BookingController::class, 'getTimeline']);
-    Route::get('/owner/calendar', [BookingController::class, 'getTimeline']);
 
     // Đặt sân công khai (hỗ trợ cả khách vãng lai lẫn user đã đăng nhập)
     Route::post('/bookings', [BookingController::class, 'store']);
@@ -147,6 +147,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/analytics', [DashboardAnalyticsController::class, 'owner']);
         });
 
+        Route::get('/owner/calendar', [BookingController::class, 'getTimeline'])
+            ->middleware('role:owner,admin');
+
         // =====================================================================
         // PHẦN 4: MATCHMAKING - QUẢN LÝ KÈO & THÀNH VIÊN
         // =====================================================================
@@ -191,12 +194,16 @@ Route::prefix('v1')->group(function () {
         });
 
         // Owner & Admin Booking Report Export & Auto Cancel Unpaid
-        Route::get('/owner/bookings/export', [BookingController::class, 'export']);
-        Route::post('/owner/bookings/cancel-unpaid', [BookingController::class, 'cancelUnpaid']);
+        Route::middleware('role:owner,admin')->group(function () {
+            Route::get('/owner/bookings/export', [BookingController::class, 'export']);
+            Route::post('/owner/bookings/cancel-unpaid', [BookingController::class, 'cancelUnpaid'])
+                ->middleware('throttle:6,1');
+        });
 
         // Admin Only Routes
         Route::middleware('role:admin')->prefix('admin')->group(function () {
             Route::get('/analytics', [DashboardAnalyticsController::class, 'admin']);
+            Route::put('/venues/{venue}/status', [VenueModuleController::class, 'updateVenueStatus']);
             Route::post('/sport-categories', [SportCategoryController::class, 'store']);
             Route::put('/sport-categories/{id}', [SportCategoryController::class, 'update']);
             Route::delete('/sport-categories/{id}', [SportCategoryController::class, 'destroy']);

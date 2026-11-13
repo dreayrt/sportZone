@@ -146,7 +146,8 @@ class AuthAndBaseApiTest extends TestCase
                 'full_name' => 'Test Register User',
                 'email' => $uniqueEmail,
                 'phone' => $uniquePhone,
-                'password' => '123456',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
                 'role' => 'customer',
             ]);
 

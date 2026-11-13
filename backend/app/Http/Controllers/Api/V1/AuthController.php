@@ -12,6 +12,7 @@ use App\Models\ReferralCode;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\UserPoint;
+use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,8 @@ use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends BaseController
 {
+    public function __construct(private TurnstileService $turnstile) {}
+
     /**
      * Đăng ký tài khoản mới (Customer / Owner)
      */
@@ -80,9 +83,16 @@ class AuthController extends BaseController
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $loginField = filter_var($request->login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+        $login = (string) $request->login;
+        $captchaRequired = $this->turnstile->loginCaptchaRequired($login, $request->ip());
 
-        $user = User::where($loginField, $request->login)->first();
+        if ($captchaRequired && ! $this->turnstile->verify($request->input('cf-turnstile-response'), $request->ip())) {
+            return $this->errorResponse('Vui lòng xác nhận captcha.', 422, ['captcha_required' => true]);
+        }
+
+        $loginField = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+
+        $user = User::where($loginField, $login)->first();
 
         // Tài khoản OAuth chưa đặt mật khẩu
         if ($user && !$user->password_hash) {
@@ -90,12 +100,21 @@ class AuthController extends BaseController
         }
 
         if (!$user || !$user->password_hash || !Hash::check($request->password, $user->password_hash)) {
-            return $this->errorResponse('Thông tin đăng nhập hoặc mật khẩu không chính xác.', 401);
+            $this->turnstile->recordLoginFailure($login, $request->ip());
+            $needsCaptcha = $this->turnstile->loginCaptchaRequired($login, $request->ip());
+
+            return $this->errorResponse(
+                'Thông tin đăng nhập hoặc mật khẩu không chính xác.',
+                401,
+                ['captcha_required' => $needsCaptcha]
+            );
         }
 
         if ($user->status === 'blocked') {
             return $this->forbidden('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ ban quản trị.');
         }
+
+        $this->turnstile->clearLoginFailures($login, $request->ip());
 
         // Cập nhật thời điểm đăng nhập gần nhất
         $user->update([

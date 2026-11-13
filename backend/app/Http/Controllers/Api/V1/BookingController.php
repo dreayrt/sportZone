@@ -226,14 +226,22 @@ class BookingController extends BaseController
     public function cancel(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        $booking = Booking::findOrFail($id);
+        $booking = Booking::with('venue')->findOrFail($id);
 
-        // Kiểm tra quyền hủy
-        if ($user && $user->isCustomer() && $booking->user_id !== $user->id) {
-            return $this->forbidden('Bạn không có quyền hủy đơn đặt này.');
+        if ($user && ! $user->isAdmin()) {
+            $allowed = $user->isCustomer()
+                ? (int) $booking->user_id === (int) $user->id
+                : ($user->isOwner() && (int) $booking->venue?->owner_id === (int) $user->id);
+
+            if (! $allowed) {
+                return $this->forbidden('Bạn không có quyền hủy đơn đặt này.');
+            }
         }
 
-        $reason = $request->input('reason', 'Khách hàng yêu cầu hủy đơn');
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+        $reason = $validated['reason'] ?? 'Khách hàng yêu cầu hủy đơn';
 
         try {
             $updated = $this->bookingService->cancelBooking($booking, $reason, $user);
@@ -383,8 +391,13 @@ class BookingController extends BaseController
      */
     public function cancelUnpaid(Request $request): JsonResponse
     {
-        $minutes = (int) $request->query('minutes', 30);
-        $count = $this->bookingService->cancelUnpaidBookings($minutes);
+        $validated = $request->validate([
+            'minutes' => ['sometimes', 'integer', 'min:1', 'max:1440'],
+        ]);
+
+        $minutes = (int) ($validated['minutes'] ?? 30);
+        $ownerId = $request->user()?->isOwner() ? (int) $request->user()->id : null;
+        $count = $this->bookingService->cancelUnpaidBookings($minutes, $ownerId);
 
         return $this->successResponse([
             'cancelled_count' => $count,
@@ -398,9 +411,12 @@ class BookingController extends BaseController
     public function getCourtSlots(Request $request, int $courtId): JsonResponse
     {
         $court = Court::with('venue')->findOrFail($courtId);
-        $date = $request->query('date', now()->toDateString());
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $date = $validated['date'] ?? now()->toDateString();
 
-        $slots = $this->bookingService->getCourtDaySlots($court, $date);
+        $slots = $this->bookingService->getCourtDaySlots($court, $date, false);
 
         return $this->successResponse([
             'court' => [
@@ -423,24 +439,37 @@ class BookingController extends BaseController
     public function getTimeline(Request $request): JsonResponse
     {
         $user = $request->user();
-        $venueId = $request->query('venue_id');
+        $validated = $request->validate([
+            'venue_id' => ['nullable', 'integer', 'exists:venues,id'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
 
-        if (! $venueId) {
-            if ($user && $user->isOwner()) {
-                $venue = Venue::where('owner_id', $user->id)->first();
-            } else {
-                $venue = Venue::first();
+        $venueId = $validated['venue_id'] ?? $request->route('venueId');
+        $includeCustomer = false;
+
+        if ($venueId !== null) {
+            $venue = Venue::findOrFail((int) $venueId);
+
+            if ($user && $user->isOwner() && (int) $venue->owner_id !== (int) $user->id) {
+                return $this->forbidden('Bạn không có quyền xem lịch của cơ sở này.');
             }
+
+            $includeCustomer = $user !== null
+                && ($user->isAdmin() || ($user->isOwner() && (int) $venue->owner_id === (int) $user->id));
+        } elseif ($user && $user->isOwner()) {
+            $venue = Venue::where('owner_id', $user->id)->first();
+
+            if (! $venue) {
+                return $this->notFound('Không tìm thấy cơ sở sân tương ứng.');
+            }
+
+            $includeCustomer = true;
         } else {
-            $venue = Venue::findOrFail($venueId);
+            return $this->notFound('Vui lòng chọn cơ sở sân.');
         }
 
-        if (! $venue) {
-            return $this->notFound('Không tìm thấy cơ sở sân tương ứng.');
-        }
-
-        $date = $request->query('date', now()->toDateString());
-        $timelineData = $this->bookingService->getVenueTimeline($venue, $date);
+        $date = $validated['date'] ?? now()->toDateString();
+        $timelineData = $this->bookingService->getVenueTimeline($venue, $date, $includeCustomer);
 
         return $this->successResponse($timelineData, 'Lấy ma trận lịch sân thành công');
     }
@@ -448,14 +477,35 @@ class BookingController extends BaseController
     /**
      * Xuất danh sách đơn đặt dạng CSV (Report)
      */
-    public function export(Request $request): StreamedResponse
+    public function export(Request $request): StreamedResponse|JsonResponse
     {
-        $date = $request->query('date', now()->toDateString());
-        $venueId = $request->query('venue_id');
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'venue_id' => ['nullable', 'integer', 'exists:venues,id'],
+        ]);
+
+        $user = $request->user();
+        $date = $validated['date'] ?? now()->toDateString();
+        $venueId = $validated['venue_id'] ?? null;
+
+        if ($user && $user->isOwner() && $venueId !== null) {
+            $ownsVenue = Venue::where('id', $venueId)
+                ->where('owner_id', $user->id)
+                ->exists();
+
+            if (! $ownsVenue) {
+                return $this->forbidden('Bạn không có quyền xuất dữ liệu của cơ sở này.');
+            }
+        }
 
         $query = Booking::with(['court', 'venue'])->where('booking_date', $date);
-        if ($venueId) {
+
+        if ($venueId !== null) {
             $query->where('venue_id', $venueId);
+        }
+
+        if ($user && $user->isOwner()) {
+            $query->whereHas('venue', fn ($q) => $q->where('owner_id', $user->id));
         }
 
         $bookings = $query->get();

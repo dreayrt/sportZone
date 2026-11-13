@@ -1,9 +1,24 @@
 import type { Metadata } from 'next';
+import { Barlow_Condensed, Be_Vietnam_Pro } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { FloatingChatbotWidget } from '@/components/ai/FloatingChatbotWidget';
+
+const sans = Be_Vietnam_Pro({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-sans',
+});
+
+const display = Barlow_Condensed({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['500', '600', '700'],
+  display: 'swap',
+  variable: '--font-display',
+});
 
 export const metadata: Metadata = {
   title: 'SportZone — Hệ Thống Quản Lý & Đặt Sân Thể Thao Trực Tuyến',
@@ -17,8 +32,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className="scroll-smooth">
-      <body className="min-h-[100dvh] flex flex-col bg-[#FAFAFA] text-neutral-900 antialiased font-sans selection:bg-sport-500 selection:text-white">
+    <html lang="vi" className={`scroll-smooth ${sans.variable} ${display.variable}`}>
+      <body className="min-h-[100dvh] flex flex-col bg-[#FAFAFA] text-neutral-900 antialiased font-sans selection:bg-sport-500 selection:text-white dark:bg-[#090A0D] dark:text-neutral-100">
         <AuthProvider>
           <Navbar />
           <main className="flex-1">

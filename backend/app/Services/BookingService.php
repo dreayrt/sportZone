@@ -555,13 +555,14 @@ class BookingService
     /**
      * Quét và tự động hủy các đơn đặt sân chưa thanh toán sau X phút
      */
-    public function cancelUnpaidBookings(int $expireMinutes = 30): int
+    public function cancelUnpaidBookings(int $expireMinutes = 30, ?int $ownerId = null): int
     {
         $threshold = Carbon::now()->subMinutes($expireMinutes);
 
         $unpaidBookings = Booking::whereIn('payment_status', ['unpaid', 'partial'])
             ->whereNotIn('status', ['cancelled', 'completed'])
             ->where('created_at', '<=', $threshold)
+            ->when($ownerId, fn ($q) => $q->whereHas('venue', fn ($v) => $v->where('owner_id', $ownerId)))
             ->get();
 
         $count = 0;
@@ -583,7 +584,7 @@ class BookingService
     /**
      * Lấy danh sách các slot trong ngày của một sân cùng trạng thái khả dụng
      */
-    public function getCourtDaySlots(Court $court, string $date): array
+    public function getCourtDaySlots(Court $court, string $date, bool $includeCustomer = false): array
     {
         $venue = $court->venue ?? Venue::findOrFail($court->venue_id);
         $openTimeStr = $venue->open_time ?? '06:00:00';
@@ -634,10 +635,10 @@ class BookingService
                 'peak' => $isPeak,
                 'rate' => $rate,
                 'is_booked' => $matchedBooking !== null,
-                'booking_code' => $matchedBooking?->booking_code,
-                'customer_name' => $matchedBooking ? ($matchedBooking->customer_name.' ('.substr($matchedBooking->customer_phone, 0, 4).'***)') : null,
-                'booking_status' => $matchedBooking?->status,
-                'checked_in' => $matchedBooking?->checked_in ?? false,
+                'booking_code' => $includeCustomer ? $matchedBooking?->booking_code : null,
+                'customer_name' => $includeCustomer && $matchedBooking ? ($matchedBooking->customer_name.' ('.substr($matchedBooking->customer_phone, 0, 4).'***)') : null,
+                'booking_status' => $includeCustomer ? $matchedBooking?->status : null,
+                'checked_in' => $includeCustomer ? ($matchedBooking?->checked_in ?? false) : false,
             ];
 
             $currentTime->addMinutes($slotStepMinutes);
@@ -649,7 +650,7 @@ class BookingService
     /**
      * Lấy Timeline ma trận lịch cho toàn bộ các sân của 1 cơ sở (Venue)
      */
-    public function getVenueTimeline(Venue $venue, string $date): array
+    public function getVenueTimeline(Venue $venue, string $date, bool $includeCustomer = false): array
     {
         $courts = Court::where('venue_id', $venue->id)->where('status', 'active')->get();
         $bookings = Booking::where('venue_id', $venue->id)
@@ -685,14 +686,14 @@ class BookingService
                     'court_id' => $court->id,
                     'court_name' => $court->name,
                     'is_booked' => $matchedBooking !== null,
-                    'booking_id' => $matchedBooking?->id,
-                    'booking_code' => $matchedBooking?->booking_code,
-                    'customer_name' => $matchedBooking?->customer_name,
-                    'customer_phone' => $matchedBooking?->customer_phone,
-                    'source' => $matchedBooking?->source,
-                    'status' => $matchedBooking?->status,
-                    'payment_status' => $matchedBooking?->payment_status,
-                    'checked_in' => $matchedBooking?->checked_in ?? false,
+                    'booking_id' => $includeCustomer ? $matchedBooking?->id : null,
+                    'booking_code' => $includeCustomer ? $matchedBooking?->booking_code : null,
+                    'customer_name' => $includeCustomer ? $matchedBooking?->customer_name : null,
+                    'customer_phone' => $includeCustomer ? $matchedBooking?->customer_phone : null,
+                    'source' => $includeCustomer ? $matchedBooking?->source : null,
+                    'status' => $includeCustomer ? $matchedBooking?->status : null,
+                    'payment_status' => $includeCustomer ? $matchedBooking?->payment_status : null,
+                    'checked_in' => $includeCustomer ? ($matchedBooking?->checked_in ?? false) : false,
                 ];
             }
 
