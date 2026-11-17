@@ -33,6 +33,8 @@ export interface Court {
   status: string;
 }
 export interface Venue {
+  admin_suspended_at?: string | null;
+  admin_suspension_reason?: string | null;
   id: number;
   owner_id: number;
   code: string;
@@ -86,7 +88,23 @@ export interface Slots {
   court_id: number;
   date: string;
   min_booking_minutes: number;
-  slots: { start: string; end: string; available: boolean }[];
+  slots: {
+    start: string;
+    end: string;
+    available: boolean;
+    state?: "available" | "booked" | "past" | "closed";
+    booking?: {
+      id: number;
+      booking_code: string;
+      start_time: string;
+      end_time: string;
+      customer_name: string;
+      customer_phone: string;
+      status: string;
+      payment_status: string;
+      checked_in: boolean;
+    } | null;
+  }[];
 }
 export async function venueRequest<T>(
   path: string,

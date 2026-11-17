@@ -8,6 +8,7 @@ use App\Models\Court;
 use App\Models\Venue;
 use App\Services\BookingService;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -31,6 +32,12 @@ class BookingController extends BaseController
         $user = $request->user();
         $query = Booking::with(['venue:id,name,address,city', 'court:id,name,surface_type', 'bookingAddons', 'voucher:id,code,name']);
 
+        // Tự động quét và hoàn tất các đơn hết giờ thi đấu
+        $this->bookingService->autoFinalizeExpiredBookings(
+            $user && $user->isOwner() ? $user->id : null,
+            $request->filled('venue_id') ? $request->integer('venue_id') : null
+        );
+
         // Phân quyền dữ liệu
         if ($user) {
             if ($user->isCustomer()) {
@@ -42,9 +49,11 @@ class BookingController extends BaseController
             // Admin thấy toàn bộ
         }
 
+        $this->validateFilters($request);
+
         // Lọc theo ngày
         if ($request->filled('date')) {
-            $query->where('booking_date', $request->query('date'));
+            $query->whereDate('booking_date', $request->query('date'));
         }
 
         // Lọc theo cơ sở
@@ -77,7 +86,11 @@ class BookingController extends BaseController
             });
         }
 
-        $bookings = $query->orderByDesc('id')->get();
+        if ($request->has('page') || $request->has('per_page')) {
+            $bookings = $query->orderByDesc('id')->paginate($request->integer('per_page', 15));
+        } else {
+            $bookings = $query->orderByDesc('id')->get();
+        }
 
         return $this->successResponse($bookings, 'Lấy danh sách đơn đặt sân thành công');
     }
@@ -87,10 +100,20 @@ class BookingController extends BaseController
      */
     public function store(Request $request): JsonResponse
     {
+        foreach (['start_time', 'end_time'] as $field) {
+            $time = $request->input($field);
+            if (is_string($time) && preg_match('/^\d{2}:\d{2}:00$/', $time)) {
+                $request->merge([$field => substr($time, 0, 5)]);
+            }
+        }
+
         // This endpoint also supports guest checkout, so it is intentionally
         // outside auth:sanctum middleware. Resolve an optional bearer token
         // explicitly so signed-in customers are still linked to their booking.
         $user = $request->user('sanctum');
+        if ($user && $user->status !== 'active') {
+            return $this->forbidden('Tài khoản đã bị khóa.');
+        }
         $requestedSource = $request->input('source', 'website');
         $isStaffBooking = $user
             && ($user->isOwner() || $user->isAdmin())
@@ -99,14 +122,14 @@ class BookingController extends BaseController
         $rules = [
             'court_id' => 'required|integer|exists:courts,id',
             'booking_date' => 'required|date_format:Y-m-d',
-            'start_time' => 'required|string',
-            'end_time' => 'required|string',
+            'start_time' => 'required|date_format:H:i',
+            'end_time' => 'required|date_format:H:i|after:start_time',
             'customer_name' => 'required|string|max:120',
             'customer_phone' => 'required|string|max:20',
             'customer_email' => 'nullable|email|max:150',
             'note' => 'nullable|string|max:500',
             'addons' => 'nullable|array',
-            'addons.*.addon_id' => 'required|integer|exists:addons,id',
+            'addons.*.addon_id' => 'required|integer|distinct|exists:addons,id',
             'addons.*.quantity' => 'required|integer|min:1',
             'voucher_code' => 'nullable|string|max:50',
         ];
@@ -144,18 +167,16 @@ class BookingController extends BaseController
                 }
 
                 $payload['payment_method'] = $payload['payment_method'] ?? 'cash';
+                $payload['status'] = 'confirmed';
                 if ($payload['payment_method'] === 'vietqr') {
                     $payload['payment_status'] = 'unpaid';
-                    $payload['status'] = 'pending';
                 } else {
                     $payload['payment_status'] = $payload['payment_status'] ?? 'unpaid';
-                    $payload['status'] = $payload['payment_status'] === 'paid' ? 'confirmed' : 'pending';
                 }
             } else {
-                // Website bookings are always pending and unpaid. Client-supplied
-                // payment status, source and method never control this transition.
+                // Booking acceptance is automatic; payment is recorded separately.
                 $payload['source'] = 'website';
-                $payload['status'] = 'pending';
+                $payload['status'] = 'confirmed';
                 $payload['payment_status'] = 'unpaid';
                 $payload['payment_method'] = 'vietqr';
             }
@@ -294,8 +315,8 @@ class BookingController extends BaseController
         }
 
         $validator = Validator::make($request->all(), [
-            'customer_name' => 'nullable|string|max:120',
-            'customer_phone' => 'nullable|string|max:20',
+            'customer_name' => 'sometimes|required|string|max:120',
+            'customer_phone' => 'sometimes|required|string|max:20',
             'customer_email' => 'nullable|email|max:150',
             'note' => 'nullable|string|max:500',
             'status' => 'nullable|in:pending,confirmed,completed,cancelled,no_show',
@@ -393,16 +414,36 @@ class BookingController extends BaseController
     {
         $validated = $request->validate([
             'minutes' => ['sometimes', 'integer', 'min:1', 'max:1440'],
+            'venue_id' => ['nullable', 'integer', 'exists:venues,id'],
         ]);
-
-        $minutes = (int) ($validated['minutes'] ?? 30);
+        $venueId = isset($validated['venue_id']) ? (int) $validated['venue_id'] : null;
         $ownerId = $request->user()?->isOwner() ? (int) $request->user()->id : null;
-        $count = $this->bookingService->cancelUnpaidBookings($minutes, $ownerId);
+        if ($venueId !== null && $ownerId !== null && ! Venue::whereKey($venueId)->where('owner_id', $ownerId)->exists()) {
+            return $this->forbidden('Bạn chỉ có thể quản lý cơ sở của mình.');
+        }
+        $minutes = (int) ($validated['minutes'] ?? 30);
+        $count = $this->bookingService->cancelUnpaidBookings($minutes, $ownerId, $venueId);
 
         return $this->successResponse([
             'cancelled_count' => $count,
             'expire_minutes' => $minutes,
         ], "Đã quét và hủy {$count} đơn đặt sân quá hạn thanh toán.");
+    }
+
+    public function markNoShows(Request $request): JsonResponse
+    {
+        $request->validate(['venue_id' => 'nullable|integer|exists:venues,id']);
+        $venueId = $request->filled('venue_id') ? $request->integer('venue_id') : null;
+        if ($venueId !== null && $request->user()->isOwner() && ! Venue::whereKey($venueId)->where('owner_id', $request->user()->id)->exists()) {
+            return $this->forbidden('Bạn chỉ có thể quản lý cơ sở của mình.');
+        }
+
+        $result = $this->bookingService->autoFinalizeExpiredBookings($request->user()->isOwner() ? $request->user()->id : null, $venueId);
+
+        return $this->successResponse([
+            'no_show_count' => $result['no_shows'],
+            'completed_count' => $result['completed'],
+        ], "Đã quét và cập nhật: {$result['completed']} đơn hoàn thành, {$result['no_shows']} đơn khách không đến.");
     }
 
     /**
@@ -411,6 +452,7 @@ class BookingController extends BaseController
     public function getCourtSlots(Request $request, int $courtId): JsonResponse
     {
         $court = Court::with('venue')->findOrFail($courtId);
+        abort_unless($court->venue?->status === 'active' && $court->venue->admin_suspended_at === null, 404);
         $validated = $request->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
@@ -469,6 +511,7 @@ class BookingController extends BaseController
         }
 
         $date = $validated['date'] ?? now()->toDateString();
+        $this->bookingService->autoFinalizeExpiredBookings(null, $venue->id);
         $timelineData = $this->bookingService->getVenueTimeline($venue, $date, $includeCustomer);
 
         return $this->successResponse($timelineData, 'Lấy ma trận lịch sân thành công');
@@ -479,29 +522,30 @@ class BookingController extends BaseController
      */
     public function export(Request $request): StreamedResponse|JsonResponse
     {
-        $validated = $request->validate([
-            'date' => ['nullable', 'date_format:Y-m-d'],
-            'venue_id' => ['nullable', 'integer', 'exists:venues,id'],
-        ]);
-
+        $this->validateFilters($request);
         $user = $request->user();
-        $date = $validated['date'] ?? now()->toDateString();
-        $venueId = $validated['venue_id'] ?? null;
+        $date = $request->query('date') ?? 'all';
+        $venueId = $request->filled('venue_id') ? $request->integer('venue_id') : null;
 
         if ($user && $user->isOwner() && $venueId !== null) {
-            $ownsVenue = Venue::where('id', $venueId)
-                ->where('owner_id', $user->id)
-                ->exists();
-
-            if (! $ownsVenue) {
+            if (! Venue::whereKey($venueId)->where('owner_id', $user->id)->exists()) {
                 return $this->forbidden('Bạn không có quyền xuất dữ liệu của cơ sở này.');
             }
         }
 
-        $query = Booking::with(['court', 'venue'])->where('booking_date', $date);
-
-        if ($venueId !== null) {
-            $query->where('venue_id', $venueId);
+        $query = Booking::with(['court', 'venue'])->orderByDesc('id');
+        foreach (['date' => 'booking_date', 'venue_id' => 'venue_id', 'court_id' => 'court_id', 'status' => 'status', 'payment_status' => 'payment_status'] as $param => $column) {
+            if ($request->filled($param) && $request->query($param) !== 'all') {
+                if ($param === 'date') {
+                    $query->whereDate($column, $request->query($param));
+                } else {
+                    $query->where($column, $request->query($param));
+                }
+            }
+        }
+        if ($request->filled('search')) {
+            $search = '%'.trim($request->query('search')).'%';
+            $query->where(fn (Builder $q) => $q->where('booking_code', 'like', $search)->orWhere('customer_name', 'like', $search)->orWhere('customer_phone', 'like', $search));
         }
 
         if ($user && $user->isOwner()) {
@@ -522,7 +566,7 @@ class BookingController extends BaseController
             fputcsv($handle, ['Mã đơn', 'Khách hàng', 'SĐT', 'Sân', 'Ngày', 'Bắt đầu', 'Kết thúc', 'Tổng tiền', 'Trạng thái', 'Thanh toán', 'Điểm danh']);
 
             foreach ($bookings as $b) {
-                fputcsv($handle, [
+                $cells = [
                     $b->booking_code,
                     $b->customer_name,
                     $b->customer_phone,
@@ -534,10 +578,38 @@ class BookingController extends BaseController
                     $b->status,
                     $b->payment_status,
                     $b->checked_in ? 'Đã đến sân' : 'Chưa đến',
-                ]);
+                ];
+                fputcsv($handle, array_map(fn ($value) => is_string($value) && preg_match('/^[=+\-@\t\r\n]/', $value) ? "'".$value : $value, $cells));
             }
 
             fclose($handle);
         }, 200, $headers);
+    }
+
+    public function refund(Request $request, int $id): JsonResponse
+    {
+        $booking = Booking::with('venue')->findOrFail($id);
+        if ($request->user()->isOwner() && $booking->venue?->owner_id !== $request->user()->id) {
+            return $this->forbidden('Bạn chỉ có thể hoàn tiền đơn thuộc cơ sở của mình.');
+        }
+        $data = $request->validate(['note' => 'required|string|max:200']);
+
+        try {
+            return $this->successResponse($this->bookingService->recordRefund($booking, $data['note'], $request->user()), 'Đã ghi nhận hoàn tiền thủ công.');
+        } catch (ValidationException $e) {
+            return $this->validationError($e->errors());
+        }
+    }
+
+    private function validateFilters(Request $request): void
+    {
+        $request->validate([
+            'date' => 'nullable|date_format:Y-m-d',
+            'venue_id' => 'nullable|integer',
+            'court_id' => 'nullable|integer',
+            'status' => 'nullable|in:all,pending,confirmed,completed,cancelled,no_show',
+            'payment_status' => 'nullable|in:all,unpaid,partial,paid,refunded',
+            'search' => 'nullable|string|max:120',
+        ]);
     }
 }

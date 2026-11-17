@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\CheckUserStatusMiddleware;
+use App\Http\Middleware\RecordAdminAction;
+use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\VerifySePayWebhook;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -8,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Exception\RouteNotFoundException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,9 +23,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'role' => \App\Http\Middleware\RoleMiddleware::class,
-            'check.status' => \App\Http\Middleware\CheckUserStatusMiddleware::class,
-            'sepay.verify' => \App\Http\Middleware\VerifySePayWebhook::class,
+            'role' => RoleMiddleware::class,
+            'admin.audit' => RecordAdminAction::class,
+            'check.status' => CheckUserStatusMiddleware::class,
+            'sepay.verify' => VerifySePayWebhook::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [
@@ -78,7 +84,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Middleware auth:sanctum với request không có header Accept: application/json
         // sẽ gọi route('login') để redirect (route này không tồn tại ở backend API).
-        $exceptions->render(function (\Symfony\Component\Routing\Exception\RouteNotFoundException $e, Request $request) {
+        $exceptions->render(function (RouteNotFoundException $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
                     'success' => false,

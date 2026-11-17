@@ -1,8 +1,17 @@
-import React from 'react';
+"use client";
+import React, { useEffect, useState } from 'react';
+import { venueRequest } from '@/lib/venues-api';
 import Link from 'next/link';
 import { Phone, Mail, Shield, CheckCircle2 } from 'lucide-react';
 
 export function Footer() {
+  const [hotline, setHotline] = useState('1900 6868');
+  useEffect(() => {
+    const ac = new AbortController();
+    venueRequest<{ hotline: string }>('/settings/public', 'GET', undefined, ac.signal)
+      .then((data) => { if (!ac.signal.aborted) setHotline(data.hotline); }).catch(() => {});
+    return () => ac.abort();
+  }, []);
   return (
     <footer className="border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/60 mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -59,7 +68,7 @@ export function Footer() {
             </h4>
             <div className="flex items-center gap-2.5 text-sm text-neutral-700 dark:text-neutral-300">
               <Phone className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-              <span className="font-semibold text-base">1900 6868</span>
+              <span className="font-semibold text-base">{hotline || 'Chưa có hotline'}</span>
               <span className="text-xs text-neutral-400">(6:00 - 23:00)</span>
             </div>
             <div className="flex items-center gap-2.5 text-sm text-neutral-500">

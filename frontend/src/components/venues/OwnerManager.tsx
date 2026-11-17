@@ -10,6 +10,7 @@ import {
   secondaryClass,
 } from "./Shared";
 import { formatVND } from "@/lib/utils";
+import { useOwnerVenue } from "@/context/OwnerVenueContext";
 import {
   Building2,
   Trophy,
@@ -31,6 +32,10 @@ import {
   XCircle,
   ExternalLink,
   Sparkles,
+  Package,
+  PauseCircle,
+  Wrench,
+  Play,
 } from "lucide-react";
 type Kind = "venues" | "courts" | "addons";
 type Field = {
@@ -71,7 +76,7 @@ const defaults: Record<Kind, Record<string, any>> = {
     hourly_rate_peak: 120000,
     peak_start: "17:00",
     peak_end: "21:00",
-    min_booking_minutes: 60,
+    min_booking_minutes: 30,
     slot_minutes: 30,
     description: "",
     image: "",
@@ -194,10 +199,10 @@ function Amenities({ venue, onSaved }: { venue: Venue; onSaved: () => void }) {
   );
 }
 function Manager({ kind }: { kind: Kind }) {
+  const { venueId: selectedVenue, refreshVenues } = useOwnerVenue();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [sports, setSports] = useState<Sport[]>([]);
   const [items, setItems] = useState<any[]>([]);
-  const [selectedVenue, setSelectedVenue] = useState("");
   const [sportFilter, setSportFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -221,12 +226,20 @@ function Manager({ kind }: { kind: Kind }) {
       venueRequest<Filters>("/venues/filters", "GET", undefined, ac.signal),
       kind === "venues"
         ? Promise.resolve([])
-        : venueRequest<any[]>(`/owner/${kind}`, "GET", undefined, ac.signal),
+        : venueRequest<any[]>(
+            `/owner/${kind}?venue_id=${selectedVenue}`,
+            "GET",
+            undefined,
+            ac.signal,
+          ),
     ])
       .then(([v, f, list]) => {
-        setVenues(v);
+        const selected = v.filter(
+          (venue) => String(venue.id) === selectedVenue,
+        );
+        setVenues(selected);
         setSports(f.sports);
-        setItems(kind === "venues" ? v : list);
+        setItems(kind === "venues" ? selected : list);
       })
       .catch((e) => {
         if (e.name !== "AbortError") setError(e.message);
@@ -235,7 +248,7 @@ function Manager({ kind }: { kind: Kind }) {
         if (!ac.signal.aborted) setLoading(false);
       });
     return () => ac.abort();
-  }, [kind, reload]);
+  }, [kind, reload, selectedVenue]);
   const venueOptions = venues.map((v) => ({ value: v.id, label: v.name }));
   const active = [
     { value: "active", label: "Hoạt động" },
@@ -357,7 +370,7 @@ function Manager({ kind }: { kind: Kind }) {
               options: [
                 { value: "active", label: "Hoạt động" },
                 { value: "maintenance", label: "Bảo trì" },
-                { value: "closed", label: "Đóng cửa" },
+                { value: "closed", label: "Tạm ngưng" },
               ],
             },
             { key: "description", label: "Mô tả", type: "textarea" },
@@ -449,16 +462,48 @@ function Manager({ kind }: { kind: Kind }) {
               : value;
     });
     try {
-      await venueRequest(
+      const saved = await venueRequest<{ id: number }>(
         `/owner/${kind}${form.id ? `/${form.id}` : ""}`,
         form.id ? "PUT" : "POST",
         body,
       );
       setForm(null);
+      await refreshVenues(kind === "venues" ? saved.id : undefined);
       setMessage("Đã lưu vào cơ sở dữ liệu.");
       setReload((n) => n + 1);
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const changeCourtStatus = async (
+    item: any,
+    status: "active" | "maintenance" | "closed",
+  ) => {
+    if (busy) return;
+    const label = status === "active" ? "Mở lại" : status === "maintenance" ? "Bảo trì" : "Tạm ngưng";
+    if (!confirm(`${label} sân "${item.name}"?`)) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    const body = Object.fromEntries(fields.map((field) => {
+      const value = item[field.key] ?? defaults.courts[field.key];
+      return [field.key,
+        field.key === "status" ? status
+          : field.type === "time" ? String(value).slice(0, 5)
+          : value === "" || value === undefined ? null
+          : field.type === "number" || field.key.endsWith("_id") ? Number(value)
+          : value,
+      ];
+    }));
+    try {
+      await venueRequest(`/owner/courts/${item.id}`, "PUT", body);
+      await refreshVenues();
+      setReload((value) => value + 1);
+      setMessage(`Đã cập nhật sân "${item.name}": ${label.toLocaleLowerCase("vi")}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không cập nhật được trạng thái sân.");
     } finally {
       setBusy(false);
     }
@@ -469,6 +514,7 @@ function Manager({ kind }: { kind: Kind }) {
     setError("");
     try {
       await venueRequest(`/owner/${kind}/${item.id}`, "DELETE");
+      await refreshVenues();
       setReload((n) => n + 1);
       setMessage("Đã xóa.");
     } catch (e: any) {
@@ -581,7 +627,12 @@ function Manager({ kind }: { kind: Kind }) {
       {kind === "venues" && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            ["Cơ sở", venues.length, Building2, "text-sport-600 bg-sport-50 dark:bg-sport-950/50"],
+            [
+              "Cơ sở",
+              venues.length,
+              Building2,
+              "text-sport-600 bg-sport-50 dark:bg-sport-950/50",
+            ],
             [
               "Đang hoạt động",
               venues.filter((v) => v.status === "active").length,
@@ -606,8 +657,12 @@ function Manager({ kind }: { kind: Kind }) {
               className="p-5 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200/80 dark:border-neutral-800 shadow-xs flex items-center justify-between gap-3"
             >
               <div>
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</p>
-                <strong className="text-2xl sm:text-3xl font-extrabold block mt-1 tracking-tight">{n}</strong>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  {label}
+                </p>
+                <strong className="text-2xl sm:text-3xl font-extrabold block mt-1 tracking-tight">
+                  {n}
+                </strong>
               </div>
               <div className={`p-3 rounded-xl ${color} shrink-0`}>
                 <Icon className="w-5 h-5" />
@@ -622,7 +677,7 @@ function Manager({ kind }: { kind: Kind }) {
             {
               label: "Tổng số sân đấu",
               value: items.length,
-              desc: "Trên các cơ sở của bạn",
+              desc: "Tại cơ sở đang chọn",
               icon: Trophy,
               color: "text-sport-600 bg-sport-50 dark:bg-sport-950/50",
             },
@@ -652,10 +707,16 @@ function Manager({ kind }: { kind: Kind }) {
               key={stat.label}
               className="p-5 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200/80 dark:border-neutral-800 shadow-xs flex items-center justify-between gap-3"
             >
-              <div>
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{stat.label}</p>
-                <strong className="text-2xl sm:text-3xl font-extrabold block mt-1 tracking-tight">{stat.value}</strong>
-                <span className="text-[11px] text-neutral-400 mt-0.5 block">{stat.desc}</span>
+              <div className="min-w-0 font-sans">
+                <p className="text-sm font-medium leading-5 text-neutral-600 dark:text-neutral-300">
+                  {stat.label}
+                </p>
+                <strong className="mt-2 block text-3xl font-semibold leading-none tracking-tight tabular-nums text-neutral-900 dark:text-neutral-100 sm:text-[32px]">
+                  {stat.value}
+                </strong>
+                <span className="mt-2 block text-xs font-normal leading-5 text-neutral-500 dark:text-neutral-400 sm:text-[13px]">
+                  {stat.desc}
+                </span>
               </div>
               <div className={`p-3 rounded-xl ${stat.color} shrink-0`}>
                 <stat.icon className="w-5 h-5" />
@@ -669,19 +730,9 @@ function Manager({ kind }: { kind: Kind }) {
           <Filter className="w-3.5 h-3.5 text-sport-600" />
           <span>Bộ lọc:</span>
         </div>
-        <select
-          aria-label="Lọc cơ sở"
-          className={`${inputClass} max-w-xs`}
-          value={selectedVenue}
-          onChange={(e) => setSelectedVenue(e.target.value)}
-        >
-          <option value="">Tất cả cơ sở của tôi</option>
-          {venueOptions.map((v) => (
-            <option key={v.value} value={v.value}>
-              {v.label}
-            </option>
-          ))}
-        </select>
+        <span className="rounded-lg bg-sport-50 px-3 py-2 text-xs font-semibold text-sport-700 dark:bg-sport-950 dark:text-sport-400">
+          {venues[0]?.name || "Chưa có cơ sở"}
+        </span>
         {kind === "courts" && (
           <select
             aria-label="Lọc môn thể thao"
@@ -715,7 +766,6 @@ function Manager({ kind }: { kind: Kind }) {
         {(selectedVenue || statusFilter || sportFilter) && (
           <button
             onClick={() => {
-              setSelectedVenue("");
               setStatusFilter("");
               setSportFilter("");
             }}
@@ -740,7 +790,7 @@ function Manager({ kind }: { kind: Kind }) {
             kind === "courts" ? (
               <article
                 key={item.id}
-                className="group bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 hover:border-sport-400 dark:hover:border-sport-600/50 rounded-2xl shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col justify-between"
+                className="group bg-white font-sans dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 hover:border-sport-400 dark:hover:border-sport-600/50 rounded-2xl shadow-subtle hover:shadow-elevated transition-all duration-200 overflow-hidden flex flex-col justify-between"
               >
                 <div>
                   {item.image ? (
@@ -774,7 +824,7 @@ function Manager({ kind }: { kind: Kind }) {
                             ? "● Hoạt động"
                             : item.status === "maintenance"
                               ? "▲ Bảo trì"
-                              : "✕ Đóng cửa"}
+                              : "Tạm ngưng"}
                         </span>
                       </div>
                     </div>
@@ -804,10 +854,10 @@ function Manager({ kind }: { kind: Kind }) {
                             ? "Hoạt động"
                             : item.status === "maintenance"
                               ? "Bảo trì"
-                              : "Đóng cửa"}
+                              : "Tạm ngưng"}
                         </span>
                       </div>
-                      <h2 className="font-bold text-xl text-neutral-900 dark:text-white tracking-tight">
+                      <h2 className="text-base font-semibold leading-6 text-neutral-900 dark:text-white tracking-tight sm:text-lg">
                         {item.name}
                       </h2>
                     </div>
@@ -815,15 +865,16 @@ function Manager({ kind }: { kind: Kind }) {
 
                   <div className="p-5 space-y-4">
                     {item.image && (
-                      <h2 className="font-bold text-xl text-neutral-900 dark:text-white tracking-tight">
+                      <h2 className="text-base font-semibold leading-6 text-neutral-900 dark:text-white tracking-tight sm:text-lg">
                         {item.name}
                       </h2>
                     )}
 
-                    <div className="flex items-center gap-2 text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                    <div className="flex items-start gap-2 text-sm leading-5 text-neutral-600 dark:text-neutral-400">
                       <Building2 className="w-4 h-4 text-sport-600 shrink-0" />
-                      <span className="truncate">
-                        {venues.find((v) => v.id === item.venue_id)?.name || "Cơ sở"}
+                      <span className="min-w-0 break-words">
+                        {venues.find((v) => v.id === item.venue_id)?.name ||
+                          "Cơ sở"}
                       </span>
                     </div>
 
@@ -851,32 +902,56 @@ function Manager({ kind }: { kind: Kind }) {
                     </div>
 
                     <div className="p-3.5 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl border border-neutral-100 dark:border-neutral-800/80 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs leading-5">
                         <span className="text-neutral-500 flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-neutral-400" />
                           Giá khung giờ thường
                         </span>
-                        <strong className="text-neutral-900 dark:text-white font-bold text-sm">
+                        <strong className="text-neutral-900 dark:text-white font-semibold text-base tabular-nums tracking-tight">
                           {formatVND(item.hourly_rate_standard)}{" "}
-                          <span className="text-xs font-normal text-neutral-400">/h</span>
+                          <span className="text-xs font-normal text-neutral-400">
+                            /h
+                          </span>
                         </strong>
                       </div>
-                      <div className="flex items-center justify-between text-xs pt-1.5 border-t border-neutral-200/60 dark:border-neutral-700/60">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs leading-5 pt-1.5 border-t border-neutral-200/60 dark:border-neutral-700/60">
                         <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
                           <Flame className="w-3.5 h-3.5" />
-                          Giờ cao điểm ({item.peak_start?.slice(0, 5)} - {item.peak_end?.slice(0, 5)})
+                          Giờ cao điểm ({item.peak_start?.slice(0, 5)} -{" "}
+                          {item.peak_end?.slice(0, 5)})
                         </span>
-                        <strong className="text-amber-600 dark:text-amber-400 font-bold text-sm">
+                        <strong className="text-amber-600 dark:text-amber-400 font-semibold text-base tabular-nums tracking-tight">
                           {formatVND(item.hourly_rate_peak)}{" "}
-                          <span className="text-xs font-normal text-neutral-400">/h</span>
+                          <span className="text-xs font-normal text-neutral-400">
+                            /h
+                          </span>
                         </strong>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-5 pt-0 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-neutral-800 mt-2">
-                  <div className="flex items-center gap-2">
+                <div className="border-t border-neutral-100 p-4 space-y-3 dark:border-neutral-800 sm:px-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {([
+                      { status: "active", label: "Mở lại", icon: Play },
+                      { status: "closed", label: "Tạm ngưng", icon: PauseCircle },
+                      { status: "maintenance", label: "Bảo trì", icon: Wrench },
+                    ] as const).filter((action) => action.status !== item.status).map((action) => (
+                      <button
+                        key={action.status}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void changeCourtStatus(item, action.status)}
+                        className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sport-500 disabled:cursor-not-allowed disabled:opacity-50 ${action.status === "active" ? "border-sport-200 bg-sport-50 text-sport-700 hover:bg-sport-100 dark:border-sport-800 dark:bg-sport-950/40 dark:text-sport-400" : action.status === "maintenance" ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400" : "border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"}`}
+                      >
+                        <action.icon aria-hidden="true" className="h-3.5 w-3.5" />
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-200 transition-colors"
                       disabled={busy}
@@ -902,32 +977,65 @@ function Manager({ kind }: { kind: Kind }) {
                     <Trash2 className="w-3.5 h-3.5" />
                     Xóa
                   </button>
+                  </div>
                 </div>
               </article>
             ) : (
               <article
                 key={item.id}
-                className="p-5 bg-white dark:bg-neutral-900 border border-neutral-200/90 dark:border-neutral-800 rounded-2xl shadow-xs space-y-3"
+                className="flex h-full flex-col gap-4 rounded-2xl border border-neutral-200/80 bg-white p-5 font-sans shadow-subtle transition-shadow hover:shadow-elevated dark:border-neutral-800 dark:bg-neutral-900"
               >
-                {item.image && (
+                {kind === "venues" && item.image && (
                   <img
                     src={item.image}
                     alt={item.name}
                     className="w-full h-40 object-cover rounded-xl"
                   />
                 )}
-                <div className="flex justify-between items-start gap-3">
-                  <div>
-                    <h2 className="font-bold text-lg text-neutral-900 dark:text-white">{item.name}</h2>
-                    <p className="text-xs text-neutral-400 font-mono mt-0.5">{item.code}</p>
+                <div className="flex items-start gap-4">
+                  {kind === "addons" && (
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-neutral-100 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-800 sm:h-24 sm:w-24">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="h-full w-full object-contain p-2"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 text-neutral-400 dark:text-neutral-500">
+                          {item.category === "drink" ? (
+                            <Coffee aria-hidden="true" className="h-6 w-6" />
+                          ) : (
+                            <Package aria-hidden="true" className="h-6 w-6" />
+                          )}
+                          <span className="text-[10px] font-medium">Chưa có ảnh</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5">
+                  <div className="min-w-0 w-full">
+                    <h2 className="break-words text-base font-semibold leading-6 tracking-tight text-neutral-900 dark:text-white">
+                      {item.name}
+                    </h2>
+                    <p className="mt-1.5 text-xs font-medium tracking-wide text-neutral-500 dark:text-neutral-400">
+                      {item.code}
+                    </p>
                   </div>
-                  <span className="text-xs rounded-lg bg-neutral-100 dark:bg-neutral-800 px-2 py-1 font-medium">
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${item.status === "active" ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800" : "bg-neutral-100 text-neutral-500 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-400 dark:ring-neutral-700"}`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 rounded-full ${item.status === "active" ? "bg-emerald-500" : "bg-neutral-400"}`}
+                    />
                     {
                       fields
                         .find((f) => f.key === "status")
                         ?.options?.find((o) => o.value === item.status)?.label
                     }
                   </span>
+                  </div>
                 </div>
                 {kind === "venues" ? (
                   <>
@@ -935,42 +1043,57 @@ function Manager({ kind }: { kind: Kind }) {
                       {item.address}, {item.district}, {item.city}
                     </p>
                     <p className="text-sm text-neutral-500">
-                      {item.open_time?.slice(0, 5)}–{item.close_time?.slice(0, 5)}{" "}
-                      · {item.phone}
+                      {item.open_time?.slice(0, 5)}–
+                      {item.close_time?.slice(0, 5)} · {item.phone}
                     </p>
                     <Link
                       className="inline-flex items-center gap-1 text-sport-600 text-sm font-semibold hover:underline"
                       href={`/venues/${item.slug}`}
                     >
-                      Xem trang công khai <ExternalLink className="w-3.5 h-3.5" />
+                      Xem trang công khai{" "}
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </Link>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      {venues.find((v) => v.id === item.venue_id)?.name}
-                    </p>
-                    <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                      {formatVND(item.price)} / {item.unit} · Tồn kho:{" "}
-                      {item.stock_quantity ?? "Không giới hạn"}
-                    </p>
+                    <div className="flex items-start gap-2 text-sm leading-5 text-neutral-500 dark:text-neutral-400">
+                      <Building2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" />
+                      <span>{venues.find((v) => v.id === item.venue_id)?.name}</span>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3 rounded-xl border border-neutral-100 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-800/50">
+                      <div className="min-w-0">
+                        <dt className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Đơn giá</dt>
+                        <dd className="mt-1.5 flex flex-wrap items-baseline gap-x-1 text-lg font-semibold tabular-nums tracking-tight text-neutral-900 dark:text-neutral-100">
+                          {formatVND(item.price)}
+                          <span className="text-xs font-normal tracking-normal text-neutral-500 dark:text-neutral-400">/ {item.unit}</span>
+                        </dd>
+                      </div>
+                      <div className="min-w-0 border-l border-neutral-200 pl-4 dark:border-neutral-700">
+                        <dt className="flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                          <Package aria-hidden="true" className="h-3.5 w-3.5" />Tồn kho
+                        </dt>
+                        <dd className={`mt-1.5 text-lg font-semibold leading-7 tabular-nums ${item.stock_quantity === 0 ? "text-rose-600 dark:text-rose-400" : "text-neutral-900 dark:text-neutral-100"}`}>
+                          {item.stock_quantity ?? <span className="text-sm font-medium">Không giới hạn</span>}
+                        </dd>
+                      </div>
+                    </dl>
                   </>
                 )}
-                <div className="flex gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
                   <button
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-3.5 text-sm font-medium text-neutral-700 transition-colors hover:border-sport-200 hover:bg-sport-50 hover:text-sport-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sport-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
                     disabled={busy}
                     onClick={() => edit(item)}
                   >
-                    <Edit3 className="w-3 h-3 text-sport-600" />
+                    <Edit3 className="w-4 h-4 text-sport-600" />
                     Chỉnh sửa
                   </button>
                   <button
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-800 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
                     disabled={busy}
                     onClick={() => remove(item)}
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-4 h-4" />
                     Xóa
                   </button>
                 </div>
@@ -981,7 +1104,7 @@ function Manager({ kind }: { kind: Kind }) {
                   />
                 )}
               </article>
-            )
+            ),
           )}
         </div>
       )}
@@ -990,7 +1113,7 @@ function Manager({ kind }: { kind: Kind }) {
           role="dialog"
           aria-modal="true"
           aria-label={`Chỉnh sửa ${title}`}
-          className="fixed inset-0 z-50 bg-black/50 overflow-y-auto p-4 flex items-start justify-center"
+          className="fixed inset-0 z-[80] bg-black/50 overflow-y-auto p-4 flex items-start justify-center"
         >
           <div className="my-8 bg-white dark:bg-neutral-900 rounded-2xl w-full max-w-3xl p-6 space-y-5">
             <div className="flex justify-between items-center">
@@ -1082,16 +1205,21 @@ function Manager({ kind }: { kind: Kind }) {
                   </label>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-3">
-                <label className={secondaryClass}>
-                  Tải ảnh đại diện
+              <div className="flex flex-wrap items-start gap-4 rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 p-4 dark:border-neutral-700 dark:bg-neutral-800/40">
+                {form.image && (
+                  <img src={form.image} alt="Ảnh đại diện đã tải" className="h-20 w-20 rounded-lg border border-neutral-200 bg-white object-cover dark:border-neutral-700" />
+                )}
+                <label className="min-w-0 space-y-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
+                  <span className="block">Tải ảnh đại diện</span>
+                  <span className="block text-xs font-normal text-neutral-500 dark:text-neutral-400">JPG, PNG hoặc WebP · Tối đa 5 MB</span>
                   <input
-                    className="block text-xs mt-2 max-w-52"
+                    className="block w-full max-w-xs text-xs text-neutral-500 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-sport-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sport-700 hover:file:bg-sport-100 dark:text-neutral-400"
                     disabled={busy}
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     onChange={(e) => {
                       if (e.target.files?.[0]) upload(e.target.files[0]);
+                      e.target.value = "";
                     }}
                   />
                 </label>

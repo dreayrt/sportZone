@@ -25,8 +25,8 @@ const bookingStatusLabels: Array<{
   color: string;
 }> = [
   { key: 'total', label: 'Tổng đơn', color: 'text-neutral-900 dark:text-white' },
-  { key: 'pending', label: 'Chờ xác nhận', color: 'text-amber-600' },
-  { key: 'confirmed', label: 'Đã xác nhận', color: 'text-sky-600' },
+  { key: 'pending', label: 'Chờ xử lý', color: 'text-amber-600' },
+  { key: 'confirmed', label: 'Đơn còn hiệu lực', color: 'text-sky-600' },
   { key: 'completed', label: 'Hoàn thành', color: 'text-emerald-600' },
   { key: 'cancelled', label: 'Đã hủy', color: 'text-rose-600' },
   { key: 'no_show', label: 'Không đến', color: 'text-neutral-500' },

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Voucher extends Model
@@ -15,6 +16,7 @@ class Voucher extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'venue_id',
         'code',
         'name',
         'discount_type',
@@ -31,6 +33,7 @@ class Voucher extends Model
     protected function casts(): array
     {
         return [
+            'venue_id' => 'integer',
             'discount_value' => 'integer',
             'max_discount' => 'integer',
             'min_order_value' => 'integer',
@@ -42,20 +45,25 @@ class Voucher extends Model
         ];
     }
 
+    public function venue(): BelongsTo
+    {
+        return $this->belongsTo(Venue::class, 'venue_id');
+    }
+
     public function bookings(): HasMany
     {
         return $this->hasMany(Booking::class, 'voucher_id');
     }
 
-    public function isValid(int $orderValue = 0): bool
+    public function isValid(int $orderValue = 0, ?int $venueId = null): bool
     {
-        return $this->validateForOrder($orderValue)['valid'];
+        return $this->validateForOrder($orderValue, $venueId)['valid'];
     }
 
     /**
      * Kiểm tra chi tiết tính hợp lệ kèm thông báo lỗi cụ thể
      */
-    public function validateForOrder(int $orderValue = 0): array
+    public function validateForOrder(int $orderValue = 0, ?int $venueId = null): array
     {
         $now = now();
 
@@ -67,10 +75,20 @@ class Voucher extends Model
             ];
         }
 
+        if ($this->venue_id !== null && $venueId !== null && (int) $this->venue_id !== (int) $venueId) {
+            $venueName = $this->venue?->name ?? 'cơ sở được chỉ định';
+
+            return [
+                'valid' => false,
+                'message' => "Mã giảm giá này chỉ áp dụng tại cơ sở \"{$venueName}\".",
+                'discount' => 0,
+            ];
+        }
+
         if ($now->lt($this->starts_at)) {
             return [
                 'valid' => false,
-                'message' => 'Mã giảm giá chưa đến thời gian áp dụng (bắt đầu từ ' . $this->starts_at->format('d/m/Y H:i') . ').',
+                'message' => 'Mã giảm giá chưa đến thời gian áp dụng (bắt đầu từ '.$this->starts_at->format('d/m/Y H:i').').',
                 'discount' => 0,
             ];
         }
@@ -78,7 +96,7 @@ class Voucher extends Model
         if ($now->gt($this->ends_at)) {
             return [
                 'valid' => false,
-                'message' => 'Mã giảm giá đã hết hạn sử dụng vào ' . $this->ends_at->format('d/m/Y H:i') . '.',
+                'message' => 'Mã giảm giá đã hết hạn sử dụng vào '.$this->ends_at->format('d/m/Y H:i').'.',
                 'discount' => 0,
             ];
         }
@@ -94,7 +112,7 @@ class Voucher extends Model
         if ($orderValue < $this->min_order_value) {
             return [
                 'valid' => false,
-                'message' => 'Đơn đặt sân chưa đạt giá trị tối thiểu ' . number_format($this->min_order_value) . 'đ để áp dụng mã này.',
+                'message' => 'Đơn đặt sân chưa đạt giá trị tối thiểu '.number_format($this->min_order_value).'đ để áp dụng mã này.',
                 'discount' => 0,
             ];
         }
@@ -128,16 +146,24 @@ class Voucher extends Model
     /**
      * Scope lấy các voucher đang khả dụng cho khách hàng
      */
-    public function scopeAvailable($query)
+    public function scopeAvailable($query, ?int $venueId = null)
     {
         $now = now();
 
-        return $query->where('status', 'active')
+        $q = $query->where('status', 'active')
             ->where('starts_at', '<=', $now)
             ->where('ends_at', '>=', $now)
-            ->where(function ($q) {
-                $q->whereNull('usage_limit')
+            ->where(function ($sub) {
+                $sub->whereNull('usage_limit')
                     ->orWhereColumn('used_count', '<', 'usage_limit');
             });
+
+        if ($venueId !== null) {
+            $q->where(function ($sub) use ($venueId) {
+                $sub->whereNull('venue_id')->orWhere('venue_id', $venueId);
+            });
+        }
+
+        return $q;
     }
 }

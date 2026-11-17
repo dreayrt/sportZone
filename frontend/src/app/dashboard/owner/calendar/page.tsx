@@ -1,454 +1,494 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { DashboardHeader } from '@/components/layout/DashboardHeader';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { MOCK_VENUES, MOCK_BOOKINGS, Court } from '@/lib/mock-data';
-import { formatVND, formatDate } from '@/lib/utils';
-import { api } from '@/lib/api';
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Calendar,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Plus,
-  User,
-  Check,
-  RotateCcw,
+  RefreshCw,
+  Clock3,
+  CheckCircle2,
+  Users,
+  ArrowUpRight,
   Phone,
-  AlertCircle
-} from 'lucide-react';
+} from "lucide-react";
+import { useOwnerVenue } from "@/context/OwnerVenueContext";
+import { OwnerBookingForm } from "@/components/bookings/OwnerBookingForm";
+import {
+  Notice,
+  inputClass,
+  buttonClass,
+  secondaryClass,
+} from "@/components/venues/Shared";
+import { Court, localDate, venueRequest } from "@/lib/venues-api";
+import {
+  statusLabels,
+  paymentLabels,
+  BookingStatus,
+  PaymentStatus,
+} from "@/lib/owner-api";
+import { formatVND } from "@/lib/utils";
+
+interface TimelineSlot {
+  is_booked: boolean;
+  available: boolean;
+  is_peak: boolean;
+  booking_code: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  checked_in: boolean;
+  status: BookingStatus;
+  payment_status: PaymentStatus;
+  start_time: string | null;
+  end_time: string | null;
+}
+interface Timeline {
+  courts: Court[];
+  matrix: { hour: string; end: string; slots: Record<number, TimelineSlot> }[];
+}
 
 export default function OwnerCalendarPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const venue = MOCK_VENUES[0]; // SportZone Chấn Hưng Complex
-  const [courts, setCourts] = useState<Court[]>(venue.courts || []);
-  const [matrixData, setMatrixData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  // Counter Booking Modal State
-  const [isCounterModalOpen, setIsCounterModalOpen] = useState(false);
-  const [counterCourtId, setCounterCourtId] = useState<number>(courts[0]?.id || 1);
-  const [counterStartTime, setCounterStartTime] = useState('08:00');
-  const [counterEndTime, setCounterEndTime] = useState('09:30');
-  const [counterCustomerName, setCounterCustomerName] = useState('');
-  const [counterCustomerPhone, setCounterCustomerPhone] = useState('');
-  const [counterNote, setCounterNote] = useState('Khách đặt trực tiếp tại quầy');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Hourly slots from 06:00 to 22:00
-  const timeSlots = [
-    '06:00', '07:00', '08:00', '09:00', '10:00', '11:00',
-    '12:00', '13:00', '14:00', '15:00', '16:00', '17:00',
-    '18:00', '19:00', '20:00', '21:00', '22:00'
-  ];
-
-  const fetchTimeline = async () => {
-    setIsLoading(true);
-    try {
-      const res = await api.bookings.getTimeline({ venue_id: venue.id, date: selectedDate });
-      if (res.success && res.data) {
-        if (res.data.courts?.length > 0) {
-          setCourts(res.data.courts);
-        }
-        if (res.data.matrix?.length > 0) {
-          setMatrixData(res.data.matrix);
-        }
-      }
-    } catch {
-      // Fallback to local evaluation
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  const { venue, venueId } = useOwnerVenue();
+  const [date, setDate] = useState(localDate());
+  const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const [loading, setLoading] = useState(Boolean(venueId));
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [courtFilter, setCourtFilter] = useState("");
+  const [form, setForm] = useState<{ courtId?: number; start?: string } | null>(
+    null,
+  );
+  const requestId = useRef(0);
   useEffect(() => {
-    fetchTimeline();
-  }, [selectedDate]);
-
-  // Adjust Date
-  const handleShiftDate = (days: number) => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(d.toISOString().split('T')[0]);
-  };
-
-  // Helper check peak hour
-  const isPeakHour = (time: string) => {
-    const hour = parseInt(time.split(':')[0], 10);
-    return hour >= 17 && hour <= 21;
-  };
-
-  // Helper booking slot from matrix or fallback
-  const getSlotInfo = (courtId: number, slotHour: string) => {
-    if (matrixData.length > 0) {
-      const row = matrixData.find((r) => r.hour === slotHour);
-      if (row && row.slots?.[courtId]) {
-        return row.slots[courtId];
+    const params = new URLSearchParams(window.location.search);
+    const requestedDate = params.get("date");
+    if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate))
+      setDate(requestedDate);
+    if (params.get("court")) setCourtFilter(params.get("court") || "");
+  }, []);
+  const load = useCallback(
+    async (quiet = false) => {
+      if (!venueId || !date) return;
+      const id = ++requestId.current;
+      if (!quiet) setLoading(true);
+      setError("");
+      try {
+        const data = await venueRequest<Timeline>(
+          `/owner/calendar?venue_id=${venueId}&date=${date}`,
+        );
+        if (id === requestId.current) setTimeline(data);
+      } catch (e) {
+        if (id === requestId.current) {
+          setTimeline(null);
+          setError(e instanceof Error ? e.message : "Không tải được lịch.");
+        }
+      } finally {
+        if (id === requestId.current) setLoading(false);
       }
-    }
-
-    // Mock fallback
-    if (courtId === 1 && (slotHour === '18:00' || slotHour === '19:00')) {
-      return {
-        is_booked: true,
-        customer_name: 'Nguyễn Minh Anh',
-        customer_phone: '0912345678',
-        booking_code: 'SZ-77812',
-        status: 'confirmed',
-        payment_status: 'paid',
-        checked_in: false,
-      };
-    }
-    if (courtId === 4 && slotHour === '07:00') {
-      return {
-        is_booked: true,
-        customer_name: 'Lê Thu Trang',
-        customer_phone: '0988111222',
-        booking_code: 'SZ-66021',
-        status: 'completed',
-        payment_status: 'paid',
-        checked_in: true,
-      };
-    }
-    return { is_booked: false };
+    },
+    [venueId, date],
+  );
+  useEffect(() => {
+    setTimeline(null);
+    void load();
+    return () => {
+      requestId.current++;
+    };
+  }, [load]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!form && !document.hidden) void load(true);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [load, form]);
+  const shift = (days: number) => {
+    const value = new Date(`${date}T12:00:00`);
+    value.setDate(value.getDate() + days);
+    setDate(
+      `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`,
+    );
   };
-
-  // Open modal on empty slot click
-  const handleSlotClick = (courtId: number, slotHour: string, isBooked: boolean) => {
-    if (isBooked) return;
-    setCounterCourtId(courtId);
-    setCounterStartTime(slotHour);
-
-    const startH = parseInt(slotHour.split(':')[0], 10);
-    const endH = startH + 1;
-    const endMinute = '30';
-    setCounterEndTime(`${String(endH).padStart(2, '0')}:${endMinute}`);
-    setIsCounterModalOpen(true);
-  };
-
-  // Handle Counter Booking Submit
-  const handleCounterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const res = await api.bookings.create({
-        court_id: counterCourtId,
-        booking_date: selectedDate,
-        start_time: counterStartTime,
-        end_time: counterEndTime,
-        customer_name: counterCustomerName || 'Khách Tại Quầy',
-        customer_phone: counterCustomerPhone || '0900000000',
-        note: counterNote,
-        payment_method: 'cash',
-        payment_status: 'paid',
-        source: 'counter',
-      });
-
-      if (res.success) {
-        alert(`Tạo đơn tại quầy thành công! Mã đơn: ${res.data?.booking_code}`);
-        setIsCounterModalOpen(false);
-        setCounterCustomerName('');
-        setCounterCustomerPhone('');
-        fetchTimeline();
-      } else {
-        alert(res.message || 'Lỗi tạo đơn tại quầy.');
-      }
-    } catch {
-      alert('Tạo đơn tại quầy thành công (Demo Mode)!');
-      setIsCounterModalOpen(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const courts =
+    timeline?.courts.filter(
+      (c) => !courtFilter || String(c.id) === courtFilter,
+    ) || [];
+  const bookings = new Map<string, TimelineSlot>();
+  timeline?.matrix.forEach((row) =>
+    courts.forEach((court) => {
+      const slot = row.slots[court.id];
+      if (slot?.booking_code) bookings.set(slot.booking_code, slot);
+    }),
+  );
+  const entries = Array.from(bookings.values());
+  const prettyDate = new Date(`${date}T12:00:00`).toLocaleDateString("vi-VN", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   return (
-    <div>
-      <DashboardHeader
-        title="Lưới Lịch Sân Theo Thời Gian Thực"
-        description="Quản lý slot giờ thi đấu trực quan, phân biệt khung giờ thường & giờ cao điểm (Peak Hours), nhận khách tại quầy nhanh."
-        actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleShiftDate(-1)} className="gap-1 text-xs">
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Hôm trước
-            </Button>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-2.5 py-1 text-xs font-semibold bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 font-mono"
-            />
-            <Button variant="outline" size="sm" onClick={() => handleShiftDate(1)} className="gap-1 text-xs">
-              Hôm sau
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setCounterCourtId(courts[0]?.id || 1);
-                setIsCounterModalOpen(true);
-              }}
-              className="gap-1.5 text-xs ml-2"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Tạo Đơn Tại Quầy
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* Legend */}
-        <div className="flex items-center justify-between gap-4 text-xs text-neutral-600 dark:text-neutral-400 bg-white dark:bg-neutral-900 p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 flex-wrap">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="font-semibold text-neutral-900 dark:text-white">Chú thích:</span>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-white border border-neutral-300 dark:bg-neutral-800"></span>
-              <span>Giờ thường trống</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-amber-50 border border-amber-300 dark:bg-amber-950/40"></span>
-              <span>Giờ vàng Peak (17h-21h)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-sport-500 text-white"></span>
-              <span>Đã đặt & Đã thanh toán</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-emerald-600 text-white"></span>
-              <span>Đã điểm danh vào sân</span>
-            </div>
-          </div>
-
-          <span className="text-[11px] text-neutral-400 italic">
-            * Nhấp vào ô trống để tạo đơn nhận khách nhanh tại quầy
-          </span>
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-sport-600">
+            <CalendarDays className="h-4 w-4" />
+            Lịch vận hành
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
+            Lưới lịch sân
+          </h1>
+          <p className="mt-2 text-sm text-neutral-500">
+            {venue?.name || "Chọn cơ sở để bắt đầu"} · Theo dõi lịch đặt và nhận
+            khách tại quầy.
+          </p>
         </div>
-
-        {/* Court Timeline Matrix Table */}
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="bg-neutral-100 dark:bg-neutral-800/80 border-b border-neutral-200 dark:border-neutral-700">
-                  <th className="py-3 px-4 text-xs font-bold text-neutral-500 w-24 border-r border-neutral-200 dark:border-neutral-700">
-                    Khung giờ
-                  </th>
-                  {courts.map((court) => (
-                    <th key={court.id} className="py-3 px-4 text-xs font-bold text-neutral-900 dark:text-white min-w-[200px] border-r last:border-r-0 border-neutral-200 dark:border-neutral-700">
-                      <div>{court.name}</div>
-                      <div className="text-[11px] font-normal text-neutral-500 font-mono">
-                        {formatVND(court.hourly_rate_standard)} / giờ
-                      </div>
+        <button
+          className={`${buttonClass} flex items-center gap-2 shadow-sm`}
+          disabled={
+            loading ||
+            venue?.status !== "active" ||
+            !timeline?.courts.some((c) => c.status === "active")
+          }
+          onClick={() => setForm({})}
+        >
+          <Plus className="h-4 w-4" />
+          Tạo đơn tại quầy
+        </button>
+      </div>
+      {error && (
+        <Notice error>
+          {error}{" "}
+          <button className="ml-2 underline" onClick={() => void load()}>
+            Thử lại
+          </button>
+        </Notice>
+      )}
+      {message && <Notice>{message}</Notice>}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          {
+            label: "Sân đang hiển thị",
+            value: courts.length,
+            icon: CalendarDays,
+            tone: "text-sport-600 bg-sport-50 dark:bg-sport-950",
+          },
+          {
+            label: "Đơn đặt trong ngày",
+            value: bookings.size,
+            icon: Users,
+            tone: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950",
+          },
+          {
+            label: "Chưa thanh toán đủ",
+            value: entries.filter((b) => b.payment_status !== "paid").length,
+            icon: Clock3,
+            tone: "text-amber-600 bg-amber-50 dark:bg-amber-950",
+          },
+          {
+            label: "Đã check-in",
+            value: entries.filter((b) => b.checked_in).length,
+            icon: CheckCircle2,
+            tone: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="flex items-center justify-between gap-3 rounded-2xl border border-neutral-200/80 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            <div>
+              <p className="text-xs font-medium text-neutral-500">
+                {stat.label}
+              </p>
+              <p className="mt-2 text-2xl font-bold tracking-tight">
+                {loading ? "—" : stat.value}
+              </p>
+            </div>
+            <span className={`rounded-xl p-2.5 ${stat.tone}`}>
+              <stat.icon className="h-5 w-5" strokeWidth={1.7} />
+            </span>
+          </div>
+        ))}
+      </div>
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-100 p-4 dark:border-neutral-800">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              aria-label="Ngày trước"
+              className={`${secondaryClass} p-2.5`}
+              onClick={() => shift(-1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <input
+              aria-label="Ngày xem lưới lịch"
+              type="date"
+              className={`${inputClass} !w-40 font-semibold`}
+              value={date}
+              onChange={(e) => {
+                if (e.target.value) setDate(e.target.value);
+              }}
+            />
+            <button
+              aria-label="Ngày sau"
+              className={`${secondaryClass} p-2.5`}
+              onClick={() => shift(1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              className={secondaryClass}
+              onClick={() => setDate(localDate())}
+            >
+              Hôm nay
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Lọc sân trong lịch"
+              className={`${inputClass} !w-auto max-w-xs`}
+              value={courtFilter}
+              onChange={(e) => setCourtFilter(e.target.value)}
+            >
+              <option value="">Tất cả sân</option>
+              {timeline?.courts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              aria-label="Làm mới lịch"
+              className={secondaryClass}
+              disabled={loading}
+              onClick={() => void load()}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              />
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-50/70 px-4 py-3 text-xs dark:bg-neutral-950/30">
+          <p className="font-medium text-neutral-600 dark:text-neutral-400">
+            {prettyDate}
+            {venue &&
+              ` · ${venue.open_time.slice(0, 5)}–${venue.close_time.slice(0, 5)}`}
+          </p>
+          <div className="flex flex-wrap gap-4">
+            {[
+              ["bg-emerald-500", "Còn trống"],
+              ["bg-amber-400", "Chưa thu đủ"],
+              ["bg-indigo-500", "Đã thanh toán"],
+              ["bg-emerald-500", "Đã check-in"],
+              ["bg-slate-300", "Đã qua giờ"],
+              ["bg-rose-400", "Bảo trì / Đóng cửa"],
+            ].map(([color, label]) => (
+              <span
+                key={label}
+                className="flex items-center gap-1.5 text-neutral-500"
+              >
+                <span className={`h-2.5 w-2.5 rounded-sm ${color}`} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+        {loading ? (
+          <div className="p-8">
+            <Notice>Đang tải lịch sân…</Notice>
+          </div>
+        ) : !venue ? (
+          <div className="p-8">
+            <Notice>
+              Chưa có cơ sở.{" "}
+              <Link className="underline" href="/dashboard/owner/venues">
+                Thêm cơ sở
+              </Link>
+              .
+            </Notice>
+          </div>
+        ) : timeline && !courts.length ? (
+          <div className="p-8">
+            <Notice>Chưa có sân phù hợp tại cơ sở này.</Notice>
+          </div>
+        ) : (
+          timeline && (
+            <div
+              className="owner-calendar-scroll max-h-[65vh] overflow-auto pb-5"
+              tabIndex={0}
+              role="region"
+              aria-label="Lịch sân, có thể cuộn ngang và dọc"
+            >
+              <table className="w-full table-fixed border-collapse text-left text-xs">
+                <thead className="sticky top-0 z-20">
+                  <tr>
+                    <th className="sticky left-0 z-30 w-28 border-b border-r border-neutral-200 bg-neutral-100 px-4 py-4 font-semibold text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800">
+                      Khung giờ
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                {timeSlots.map((slot) => {
-                  const isPeak = isPeakHour(slot);
-
-                  return (
-                    <tr key={slot} className="hover:bg-neutral-50/40 transition-colors">
-                      <td className={`py-3 px-4 font-mono text-xs font-bold border-r border-neutral-200 dark:border-neutral-700 ${
-                        isPeak ? 'text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/20' : 'text-neutral-600 dark:text-neutral-400'
-                      }`}>
-                        {slot}
-                        {isPeak && <span className="block text-[9px] uppercase tracking-wider font-semibold">PEAK</span>}
-                      </td>
-
+                    {courts.map((c) => (
+                      <th
+                        key={c.id}
+                        className="w-60 border-b border-r border-neutral-200 bg-neutral-50 p-4 last:border-r-0 dark:border-neutral-700 dark:bg-neutral-800"
+                      >
+                        <p className="font-semibold text-neutral-900 dark:text-white">
+                          {c.name}
+                        </p>
+                        <p className="mt-1.5 font-normal text-neutral-500">
+                          {formatVND(c.hourly_rate_standard)}/giờ
+                          {c.status !== "active" &&
+                            ` · ${c.status === "maintenance" ? "Bảo trì" : "Đóng cửa"}`}
+                        </p>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeline.matrix.map((row, index) => (
+                    <tr key={row.hour}>
+                      <th className="sticky left-0 z-10 border-b border-r border-neutral-100 bg-white px-4 py-2 font-sans font-medium tabular-nums text-neutral-700 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
+                        <span>{row.hour}</span>
+                        <span className="mt-1 block text-[11px] font-normal text-neutral-500">
+                          {row.end}
+                        </span>
+                      </th>
                       {courts.map((court) => {
-                        const booking = getSlotInfo(court.id, slot);
-
-                        if (booking.is_booked) {
-                          return (
-                            <td key={court.id} className="p-2 border-r last:border-r-0 border-neutral-200 dark:border-neutral-800 bg-sport-50/50 dark:bg-sport-950/20">
-                              <div className={`p-2 rounded-lg text-xs space-y-1 shadow-2xs border ${
-                                booking.checked_in
-                                  ? 'bg-emerald-600 text-white border-emerald-500'
-                                  : 'bg-sport-600 text-white border-sport-500'
-                              }`}>
-                                <div className="flex items-center justify-between">
-                                  <span className="font-mono font-bold text-[11px]">
-                                    {booking.booking_code}
-                                  </span>
-                                  <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-sm">
-                                    {booking.checked_in ? 'Đã check-in' : 'Đã xác nhận'}
-                                  </span>
-                                </div>
-                                <div className="font-semibold truncate">
-                                  {booking.customer_name}
-                                </div>
-                                {booking.customer_phone && (
-                                  <div className="text-[10px] opacity-80 font-mono">
-                                    {booking.customer_phone}
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          );
-                        }
-
+                        const slot = row.slots[court.id];
+                        if (
+                          slot?.is_booked &&
+                          index > 0 &&
+                          timeline.matrix[index - 1].slots[court.id]
+                            ?.booking_code === slot.booking_code
+                        )
+                          return null;
+                        let span = 1;
+                        if (slot?.is_booked)
+                          while (
+                            index + span < timeline.matrix.length &&
+                            timeline.matrix[index + span].slots[court.id]
+                              ?.booking_code === slot.booking_code
+                          )
+                            span++;
+                        const past =
+                          new Date(`${date}T${row.hour}:00`).getTime() <
+                          Date.now();
+                        const emptyTone =
+                          court.status !== "active"
+                            ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-400"
+                            : past
+                              ? "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
+                              : slot?.available
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:border-emerald-500 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-950/60"
+                                : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400";
+                        const color = slot?.checked_in
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
+                          : slot?.payment_status === "paid"
+                            ? "border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200"
+                            : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200";
                         return (
                           <td
                             key={court.id}
-                            onClick={() => handleSlotClick(court.id, slot, false)}
-                            className={`p-2 border-r last:border-r-0 border-neutral-200 dark:border-neutral-800 transition-colors cursor-pointer group ${
-                              isPeak ? 'bg-amber-50/20 dark:bg-amber-950/10 hover:bg-amber-100/40' : 'hover:bg-neutral-100/60 dark:hover:bg-neutral-850'
-                            }`}
+                            rowSpan={span}
+                            className={`border-b border-r border-neutral-100 p-1.5 align-top last:border-r-0 dark:border-neutral-800 ${slot?.is_peak && !slot.is_booked ? "bg-amber-50/40 dark:bg-amber-950/10" : ""}`}
                           >
-                            <div className="h-12 rounded-lg border border-dashed border-neutral-200 dark:border-neutral-800 flex items-center justify-center text-neutral-300 dark:text-neutral-700 group-hover:border-sport-400 group-hover:text-sport-500 transition-all text-xs font-medium">
-                              <span className="hidden group-hover:inline flex items-center gap-1 text-[11px]">
-                                <Plus className="w-3 h-3" /> Đặt tại quầy
-                              </span>
-                              <span className="group-hover:hidden text-[10px]">Trống</span>
-                            </div>
+                            {slot?.is_booked ? (
+                              <Link
+                                href={`/dashboard/owner/bookings?booking=${slot.booking_code}`}
+                                aria-label={`Xem đơn ${slot.booking_code}, ${slot.customer_name}, ${slot.start_time?.slice(0, 5)} đến ${slot.end_time?.slice(0, 5)}`}
+                                className={`group block h-full rounded-lg border border-l-[3px] px-3 py-2 transition-shadow hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sport-500 ${color}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-1 text-xs font-bold tabular-nums tracking-tight">
+                                    <Clock3 className="h-3 w-3 shrink-0 opacity-60" />
+                                    {slot.start_time?.slice(0, 5)}
+                                    <span className="font-normal opacity-40">–</span>
+                                    {slot.end_time?.slice(0, 5)}
+                                  </span>
+                                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/70 transition-colors group-hover:bg-white dark:bg-white/10 dark:group-hover:bg-white/20"><ArrowUpRight className="h-3 w-3" /></span>
+                                </div>
+                                <p className="mt-1 truncate text-xs font-semibold text-neutral-900 dark:text-white" title={slot.customer_name || undefined}>
+                                  {slot.customer_name}
+                                </p>
+                                <p className="mt-0.5 flex items-center gap-1 text-[10px] tabular-nums text-neutral-500 dark:text-neutral-400">
+                                  <Phone className="h-3 w-3 shrink-0" />
+                                  {slot.customer_phone}
+                                </p>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                                  {(slot.checked_in || !["pending", "confirmed"].includes(slot.status)) && <span className="inline-flex items-center gap-1 rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ring-black/5 dark:bg-white/10 dark:ring-white/10">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" />{slot.checked_in
+                                    ? "Đã check-in"
+                                    : statusLabels[slot.status]}</span>}
+                                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${slot.payment_status === "paid" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"}`}>{paymentLabels[slot.payment_status]}</span>
+                                </div>
+                                <p className="mt-1.5 text-[9px] font-medium tracking-wide opacity-60">Mã đơn · {slot.booking_code}</p>
+                              </Link>
+                            ) : (
+                              <button
+                                disabled={!slot?.available}
+                                onClick={() =>
+                                  setForm({
+                                    courtId: court.id,
+                                    start: row.hour,
+                                  })
+                                }
+                                className={`group flex min-h-12 w-full items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition-colors disabled:cursor-default ${emptyTone}`}
+                                title={
+                                  slot?.available
+                                    ? "Tạo đơn tại quầy từ giờ này"
+                                    : "Không thể bắt đầu đặt tại khung giờ này"
+                                }
+                              >
+                                {slot?.available ? (
+                                  <>
+                                    <Plus className="h-3 w-3" />
+                                    Trống
+                                  </>
+                                ) : court.status !== "active" ? (
+                                  court.status === "maintenance" ? (
+                                    "Bảo trì"
+                                  ) : (
+                                    "Đóng cửa"
+                                  )
+                                ) : past ? (
+                                  "Đã qua giờ"
+                                ) : (
+                                  "Không khả dụng"
+                                )}
+                              </button>
+                            )}
                           </td>
                         );
                       })}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* Counter Booking Modal */}
-        {isCounterModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-sport-100 dark:bg-sport-950 text-sport-600 flex items-center justify-center">
-                    <Plus className="w-4 h-4" />
-                  </div>
-                  <h3 className="font-bold text-sm text-neutral-900 dark:text-white">
-                    Tạo Đơn Đặt Sân Tại Quầy Tiếp Tân
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setIsCounterModalOpen(false)}
-                  className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <form onSubmit={handleCounterSubmit} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                    Chọn sân thi đấu *
-                  </label>
-                  <select
-                    value={counterCourtId}
-                    onChange={(e) => setCounterCourtId(parseInt(e.target.value, 10))}
-                    className="w-full px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 font-semibold"
-                  >
-                    {courts.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({formatVND(c.hourly_rate_standard)}/h)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                      Giờ bắt đầu *
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={counterStartTime}
-                      onChange={(e) => setCounterStartTime(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                      Giờ kết thúc *
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={counterEndTime}
-                      onChange={(e) => setCounterEndTime(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                      Tên khách hàng *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={counterCustomerName}
-                      onChange={(e) => setCounterCustomerName(e.target.value)}
-                      placeholder="VD: Anh Tuấn"
-                      className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                      Số điện thoại *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={counterCustomerPhone}
-                      onChange={(e) => setCounterCustomerPhone(e.target.value)}
-                      placeholder="0901234567"
-                      className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-medium text-neutral-600 dark:text-neutral-400 block mb-1">
-                    Ghi chú
-                  </label>
-                  <input
-                    type="text"
-                    value={counterNote}
-                    onChange={(e) => setCounterNote(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsCounterModalOpen(false)}
-                  >
-                    Hủy Bỏ
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? 'Đang Tạo Đơn...' : 'Xác Nhận Nhận Khách'}
-                  </Button>
-                </div>
-              </form>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          )
         )}
-      </div>
+        <div className="border-t border-neutral-100 px-4 py-3 text-[11px] text-neutral-400 dark:border-neutral-800">
+          Chọn ô trống để đặt tại quầy · Chọn đơn để xem chi tiết · Tự cập nhật
+          mỗi phút
+        </div>
+      </section>
+      {form && venue && (
+        <OwnerBookingForm
+          venues={[venue]}
+          initialCourtId={
+            form.courtId || venue.courts?.find((c) => c.status === "active")?.id
+          }
+          initialDate={date}
+          initialTime={form.start}
+          onClose={() => setForm(null)}
+          onSaved={(booking) => {
+            setForm(null);
+            setMessage(`Đã tạo đơn ${booking.booking_code}.`);
+            void load();
+          }}
+        />
+      )}
     </div>
   );
 }

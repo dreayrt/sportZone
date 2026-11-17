@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\AuditLogController;
+use App\Http\Controllers\Api\V1\Admin\SystemSettingController;
 use App\Http\Controllers\Api\V1\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\V1\Admin\VenueController;
 use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingController;
@@ -15,8 +18,8 @@ use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ReferralController;
 use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\SportCategoryController;
-use App\Http\Controllers\Api\V1\VoucherController;
 use App\Http\Controllers\Api\V1\VenueModuleController;
+use App\Http\Controllers\Api\V1\VoucherController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,6 +29,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+    Route::get('/settings/public', [SystemSettingController::class, 'publicSettings']);
     // Health Check
     Route::get('/health', [HealthCheckController::class, 'index']);
 
@@ -90,7 +94,6 @@ Route::prefix('v1')->group(function () {
 
     // Public Court Slots & Calendar Timeline
     Route::get('/courts/{courtId}/slots', [BookingController::class, 'getCourtSlots']);
-    Route::get('/venues/{venueId}/timeline', [BookingController::class, 'getTimeline']);
 
     // Đặt sân công khai (hỗ trợ cả khách vãng lai lẫn user đã đăng nhập)
     Route::post('/bookings', [BookingController::class, 'store']);
@@ -147,8 +150,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/analytics', [DashboardAnalyticsController::class, 'owner']);
         });
 
-        Route::get('/owner/calendar', [BookingController::class, 'getTimeline'])
-            ->middleware('role:owner,admin');
+        Route::middleware('role:owner,admin')->group(function () {
+            Route::get('/owner/calendar', [BookingController::class, 'getTimeline']);
+            Route::get('/venues/{venueId}/timeline', [BookingController::class, 'getTimeline']);
+            Route::get('/owner/bookings/export', [BookingController::class, 'export']);
+            Route::post('/owner/bookings/cancel-unpaid', [BookingController::class, 'cancelUnpaid'])
+                ->middleware('throttle:6,1');
+            Route::post('/owner/bookings/mark-no-shows', [BookingController::class, 'markNoShows']);
+            Route::post('/bookings/{id}/refund', [BookingController::class, 'refund']);
+        });
 
         // =====================================================================
         // PHẦN 4: MATCHMAKING - QUẢN LÝ KÈO & THÀNH VIÊN
@@ -193,17 +203,25 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{id}/addons/{addonId}', [BookingController::class, 'removeAddon']);
         });
 
-        // Owner & Admin Booking Report Export & Auto Cancel Unpaid
-        Route::middleware('role:owner,admin')->group(function () {
-            Route::get('/owner/bookings/export', [BookingController::class, 'export']);
-            Route::post('/owner/bookings/cancel-unpaid', [BookingController::class, 'cancelUnpaid'])
-                ->middleware('throttle:6,1');
+        // Quản lý Vouchers (Chủ sân - Owner)
+        Route::prefix('owner/vouchers')->middleware('role:owner')->group(function () {
+            Route::get('/', [VoucherController::class, 'ownerIndex']);
+            Route::post('/', [VoucherController::class, 'ownerStore']);
+            Route::put('/{id}', [VoucherController::class, 'ownerUpdate']);
+            Route::delete('/{id}', [VoucherController::class, 'ownerDestroy']);
         });
 
         // Admin Only Routes
-        Route::middleware('role:admin')->prefix('admin')->group(function () {
+        Route::middleware(['role:admin', 'admin.audit'])->prefix('admin')->group(function () {
+            Route::get('/venues', [VenueController::class, 'index']);
+            Route::get('/venues/{venue}', [VenueController::class, 'show']);
+            Route::put('/venues/{venue}/status', [VenueController::class, 'updateStatus']);
+            Route::get('/settings', [SystemSettingController::class, 'index']);
+            Route::put('/settings', [SystemSettingController::class, 'update']);
+            Route::get('/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('/sport-categories', [SportCategoryController::class, 'adminIndex']);
             Route::get('/analytics', [DashboardAnalyticsController::class, 'admin']);
-            Route::put('/venues/{venue}/status', [VenueModuleController::class, 'updateVenueStatus']);
+            Route::put('/venues/{venue}/approval-status', [VenueModuleController::class, 'updateVenueStatus']);
             Route::post('/sport-categories', [SportCategoryController::class, 'store']);
             Route::put('/sport-categories/{id}', [SportCategoryController::class, 'update']);
             Route::delete('/sport-categories/{id}', [SportCategoryController::class, 'destroy']);
@@ -221,7 +239,15 @@ Route::prefix('v1')->group(function () {
             Route::put('/users/{id}/status', [AdminUserController::class, 'updateStatus']);
             Route::put('/users/{id}/role', [AdminUserController::class, 'updateRole']);
 
+            // Quản lý Đánh giá
+            Route::get('/reviews', [ReviewController::class, 'adminIndex']);
             Route::put('/reviews/{id}/status', [ReviewController::class, 'updateStatus']);
+
+            // Quản lý Đơn đặt sân & Xuất báo cáo toàn sàn
+            Route::get('/bookings', [BookingController::class, 'index']);
+            Route::get('/bookings/export', [BookingController::class, 'export']);
+            Route::get('/calendar', [BookingController::class, 'getTimeline']);
+            Route::get('/courts/{court}/calendar', [VenueModuleController::class, 'ownerCalendar']);
         });
     });
 });

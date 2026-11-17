@@ -59,7 +59,7 @@ export function BookingQrScanner({ onScan, onClose }: BookingQrScannerProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="checkin-scanner-title">
+    <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="checkin-scanner-title">
       <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-5 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
           <div>

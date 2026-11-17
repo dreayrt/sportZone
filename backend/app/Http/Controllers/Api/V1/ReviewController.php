@@ -24,7 +24,7 @@ class ReviewController extends BaseController
             ? Venue::find($venueId)
             : Venue::where('slug', $venueId)->first();
 
-        if (!$venue) {
+        if (! $venue) {
             return $this->notFound('Không tìm thấy cơ sở thể thao.');
         }
 
@@ -105,7 +105,7 @@ class ReviewController extends BaseController
             ? Venue::find($venueId)
             : Venue::where('slug', $venueId)->first();
 
-        if (!$venue) {
+        if (! $venue) {
             return $this->notFound('Không tìm thấy cơ sở thể thao.');
         }
 
@@ -154,7 +154,7 @@ class ReviewController extends BaseController
 
         // 1. Kiểm tra đơn đặt sân tồn tại
         $booking = Booking::with('court')->find($request->input('booking_id'));
-        if (!$booking) {
+        if (! $booking) {
             return $this->notFound('Không tìm thấy thông tin đơn đặt sân.');
         }
 
@@ -177,7 +177,7 @@ class ReviewController extends BaseController
 
         // 5. Xác định venue_id từ relationship thật trong project (không tin venue_id từ client gửi)
         $venueId = $booking->venue_id ?: $booking->court?->venue_id;
-        if (!$venueId) {
+        if (! $venueId) {
             return $this->errorResponse('Không xác định được cơ sở thể thao của đơn đặt sân này.', 422);
         }
 
@@ -210,8 +210,55 @@ class ReviewController extends BaseController
                 'created_at' => $review->created_at?->toIso8601String(),
             ], 'Gửi đánh giá thành công! Cảm ơn bạn đã đóng góp ý kiến.', 201);
         } catch (\Throwable $e) {
-            return $this->errorResponse('Không thể lưu đánh giá: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể lưu đánh giá: '.$e->getMessage(), 500);
         }
+    }
+
+    /**
+     * Quản lý danh sách đánh giá toàn sàn (Admin)
+     * GET /api/v1/admin/reviews
+     */
+    public function adminIndex(Request $request): JsonResponse
+    {
+        $request->validate([
+            'keyword' => 'nullable|string|max:150',
+            'status' => 'nullable|in:visible,hidden',
+            'rating' => 'nullable|integer|between:1,5',
+            'venue_id' => 'nullable|integer',
+            'per_page' => 'nullable|integer|between:1,100',
+        ]);
+
+        $query = Review::with([
+            'user:id,full_name,email,avatar',
+            'venue:id,name,address,city,district',
+            'booking:id,booking_code',
+        ]);
+
+        if ($venueId = $request->input('venue_id')) {
+            $query->where('venue_id', $venueId);
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($rating = $request->input('rating')) {
+            $query->where('rating', (int) $rating);
+        }
+
+        if ($keyword = $request->input('keyword')) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('comment', 'like', "%{$keyword}%")
+                    ->orWhere('customer_name', 'like', "%{$keyword}%")
+                    ->orWhereHas('user', fn ($uq) => $uq->where('full_name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('venue', fn ($vq) => $vq->where('name', 'like', "%{$keyword}%"));
+            });
+        }
+
+        $reviews = $query->orderByDesc('id')
+            ->paginate($request->integer('per_page', 15));
+
+        return $this->successResponse($reviews, 'Lấy danh sách đánh giá thành công.');
     }
 
     /**
@@ -232,7 +279,7 @@ class ReviewController extends BaseController
         }
 
         $review = Review::find($id);
-        if (!$review) {
+        if (! $review) {
             return $this->notFound('Không tìm thấy đánh giá yêu cầu.');
         }
 
@@ -256,7 +303,7 @@ class ReviewController extends BaseController
                 'venue_updated_review_count' => (int) $venue?->review_count,
             ], 'Cập nhật trạng thái đánh giá thành công.');
         } catch (\Throwable $e) {
-            return $this->errorResponse('Không thể cập nhật trạng thái: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể cập nhật trạng thái: '.$e->getMessage(), 500);
         }
     }
 
