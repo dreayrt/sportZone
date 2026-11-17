@@ -1,3 +1,5 @@
+import type { Booking } from '@/lib/mock-data';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 export interface ApiResponse<T = any> {
@@ -633,6 +635,11 @@ export const api = {
   },
 
   bookings: {
+    hold: (body: { court_id: number; booking_date: string; start_time: string; end_time: string; frequency?: 'weekly' | 'monthly'; occurrences?: number }) =>
+      apiRequest<{ token: string; expires_at: string; dates: string[]; discount_percent: number }>('/booking-holds', { method: 'POST', body: JSON.stringify(body) }),
+    releaseHold: (token: string) => apiRequest(`/booking-holds/${encodeURIComponent(token)}`, { method: 'DELETE' }),
+    createRecurring: (body: Record<string, unknown>) =>
+      apiRequest<{ group_id: string; bookings: Booking[]; total_price: number; discount_amount: number; discount_percent: number }>('/bookings/recurring', { method: 'POST', body: JSON.stringify(body) }),
     getAll: (params?: Record<string, string | number>) => {
       const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
       return apiRequest(`/bookings${qs}`);
@@ -669,7 +676,7 @@ export const api = {
         { method: 'POST', body: JSON.stringify({ booking_code: bookingCode }) }
       ),
     getStatus: (bookingCode: string) =>
-      apiRequest<{ booking_code: string; total_price: number; total_paid: number; payment_status: string; status: string; is_paid: boolean; is_expired: boolean; expires_at: string }>(
+      apiRequest<{ booking_code: string; total_price: number; total_paid: number; payment_status: Booking['payment_status']; status: Booking['status']; is_paid: boolean; is_expired: boolean; expires_at: string }>(
         `/payments/status/${encodeURIComponent(bookingCode)}`
       ),
   },

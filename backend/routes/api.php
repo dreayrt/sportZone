@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Admin\VenueController;
 use App\Http\Controllers\Api\V1\AiAssistantController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\BookingReservationController;
 use App\Http\Controllers\Api\V1\DashboardAnalyticsController;
 use App\Http\Controllers\Api\V1\HealthCheckController;
 use App\Http\Controllers\Api\V1\LoyaltyController;
@@ -101,6 +102,9 @@ Route::prefix('v1')->group(function () {
     // Protected Routes (Yêu cầu đăng nhập Sanctum token)
     Route::middleware(['auth:sanctum', 'check.status'])->group(function () {
         // Auth session
+        Route::post('/booking-holds', [BookingReservationController::class, 'store'])->middleware('throttle:30,1');
+        Route::delete('/booking-holds/{token}', [BookingReservationController::class, 'destroy'])->whereUuid('token');
+        Route::post('/bookings/recurring', [BookingReservationController::class, 'recurring'])->middleware('throttle:10,1');
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/auth/me', [AuthController::class, 'me']);
 

@@ -11,15 +11,12 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Models\Voucher;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class OwnerOperationsTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function createApplication(): Application
     {
         $app = parent::createApplication();

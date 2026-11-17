@@ -178,9 +178,9 @@ class BookingService
     /**
      * Tạo đơn đặt sân với Concurrency Lock chống trùng lịch tuyệt đối
      */
-    public function createBooking(array $payload, ?User $user = null): Booking
+    public function createBooking(array $payload, ?User $user = null, ?array $recurrence = null): Booking
     {
-        return DB::transaction(function () use ($payload, $user) {
+        return DB::transaction(function () use ($payload, $user, $recurrence) {
             $court = Court::with('venue')->lockForUpdate()->findOrFail($payload['court_id']);
             $court->setRelation('venue', Venue::lockForUpdate()->findOrFail($court->venue_id));
 
@@ -193,6 +193,8 @@ class BookingService
             $bookingDate = $payload['booking_date'];
             $startTime = strlen($payload['start_time']) === 5 ? $payload['start_time'].':00' : $payload['start_time'];
             $endTime = strlen($payload['end_time']) === 5 ? $payload['end_time'].':00' : $payload['end_time'];
+
+            $this->assertNoHoldConflict($court->id, $bookingDate, $startTime, $endTime, $user, $payload['hold_token'] ?? null);
 
             $startsAt = Carbon::parse($bookingDate.' '.$startTime);
             if ($startsAt->lt(now()) || $startTime < $court->venue->open_time || $endTime > $court->venue->close_time) {
@@ -237,6 +239,12 @@ class BookingService
                 $payload['voucher_code'] ?? null
             );
 
+            if ($recurrence !== null) {
+                $recurringDiscount = (int) round($pricing['court_fee'] * $recurrence['discount_percent'] / 100);
+                $pricing['discount_amount'] += $recurringDiscount;
+                $pricing['total_price'] = max(0, $pricing['total_price'] - $recurringDiscount);
+            }
+
             $bookingCode = $this->generateUniqueBookingCode();
             $status = 'confirmed';
             $paymentStatus = $payload['payment_status'] ?? 'unpaid';
@@ -269,7 +277,15 @@ class BookingService
                 'payment_status' => $paymentStatus,
                 'payment_method' => $paymentMethod,
                 'checked_in' => false,
+                'recurrence_group_id' => $recurrence['group_id'] ?? null,
+                'recurrence_frequency' => $recurrence['frequency'] ?? null,
+                'recurrence_discount_percent' => $recurrence['discount_percent'] ?? 0,
             ]);
+
+            if (! empty($payload['hold_token'])) {
+                DB::table('booking_holds')->where('token', $payload['hold_token'])->where('user_id', $user?->id)
+                    ->where('court_id', $court->id)->where('booking_date', $bookingDate)->delete();
+            }
 
             // Lưu chi tiết dịch vụ đi kèm
             foreach ($pricing['addons_details'] as $addonDetail) {
@@ -304,6 +320,21 @@ class BookingService
 
             return $booking->load(['venue', 'court', 'bookingAddons', 'voucher']);
         });
+    }
+
+    public function assertNoHoldConflict(int $courtId, string $date, string $start, string $end, ?User $user = null, ?string $token = null): void
+    {
+        $holds = DB::table('booking_holds')->where('court_id', $courtId)->where('booking_date', $date)
+            ->where('expires_at', '>', now())->where('start_time', '<', $end)->where('end_time', '>', $start)
+            ->lockForUpdate()->get();
+        $owned = $holds->first(fn ($hold): bool => $token !== null && $hold->token === $token && (int) $hold->user_id === $user?->id
+            && substr($hold->start_time, 0, 5) === substr($start, 0, 5) && substr($hold->end_time, 0, 5) === substr($end, 0, 5));
+        if ($token !== null && $owned === null) {
+            throw ValidationException::withMessages(['hold_token' => 'Phiên giữ chỗ đã hết hạn. Vui lòng chọn lại khung giờ.']);
+        }
+        if ($holds->contains(fn ($hold): bool => $owned === null || $hold->id !== $owned->id)) {
+            throw ValidationException::withMessages(['slot' => "Khung giờ ngày {$date} đang được khách khác giữ. Vui lòng chọn khung giờ khác."]);
+        }
     }
 
     /**
@@ -619,7 +650,7 @@ class BookingService
         $courtFee = (int) $booking->court_fee;
         $subtotal = $courtFee + $addonsFee;
 
-        $discountAmount = 0;
+        $discountAmount = (int) round($courtFee * ($booking->recurrence_discount_percent ?? 0) / 100);
         if ($booking->voucher_id) {
             $voucher = Voucher::find($booking->voucher_id);
             if ($voucher) {
@@ -807,7 +838,7 @@ class BookingService
     /**
      * Lấy danh sách các slot trong ngày của một sân cùng trạng thái khả dụng
      */
-    public function getCourtDaySlots(Court $court, string $date, bool $includeCustomer = false): array
+    public function getCourtDaySlots(Court $court, string $date, bool $includeCustomer = false, ?int $viewerId = null): array
     {
         $venue = $court->venue ?? Venue::findOrFail($court->venue_id);
         $openTimeStr = $venue->open_time ?? '06:00:00';
@@ -815,6 +846,9 @@ class BookingService
 
         $peakStart = $court->peak_start ?? '17:00:00';
         $peakEnd = $court->peak_end ?? '21:00:00';
+
+        $this->cancelUnpaidBookings(Booking::PAYMENT_TIMEOUT_MINUTES, null, $venue->id);
+        $holds = DB::table('booking_holds')->where('court_id', $court->id)->where('booking_date', $date)->where('expires_at', '>', now())->get();
 
         // Lấy tất cả bookings của court trong ngày
         $existingBookings = Booking::where('court_id', $court->id)
@@ -845,6 +879,10 @@ class BookingService
                 return $bStart < $endStr && $bEnd > $startStr;
             });
 
+            $matchedHold = $holds->first(fn ($hold): bool => substr($hold->start_time, 0, 5) < $endStr && substr($hold->end_time, 0, 5) > $startStr);
+            $awaitingPayment = $matchedBooking && $matchedBooking->payment_method === 'vietqr' && $matchedBooking->payment_status === 'unpaid';
+            $closed = $court->status !== 'active' || $venue->status !== 'active' || $venue->admin_suspended_at !== null;
+
             // Kiểm tra có phải peak không
             $isPeak = ($startStr >= substr($peakStart, 0, 5) && $startStr < substr($peakEnd, 0, 5));
             $rate = $this->calculatePricing($court, $slotStart->format('H:i:s'), $slotEnd->format('H:i:s'))['court_fee'];
@@ -855,8 +893,10 @@ class BookingService
                 'end_time' => $slotEnd->format('H:i:s'),
                 'peak' => $isPeak,
                 'rate' => $rate,
-                'is_booked' => $matchedBooking !== null || $court->status !== 'active' || $court->venue->status !== 'active' || $court->venue->admin_suspended_at !== null || $slotStart->lt(now()),
-                'state' => $matchedBooking !== null ? 'booked' : ($slotStart->lt(now()) ? 'past' : ($court->status !== 'active' ? 'closed' : 'available')),
+                'is_booked' => $matchedBooking !== null || $matchedHold !== null || $closed || $slotStart->lt(now()),
+                'state' => $closed ? 'closed' : ($slotStart->lt(now()) ? 'past' : ($awaitingPayment || $matchedHold !== null ? 'held' : ($matchedBooking !== null ? 'booked' : 'available'))),
+                'is_own_hold' => $matchedHold !== null && (int) $matchedHold->user_id === $viewerId,
+                'hold_expires_at' => $matchedHold ? Carbon::parse($matchedHold->expires_at)->toIso8601String() : ($awaitingPayment ? $matchedBooking->paymentExpiresAt()->toIso8601String() : null),
                 'booking_code' => $includeCustomer ? $matchedBooking?->booking_code : null,
                 'customer_name' => $includeCustomer && $matchedBooking ? ($matchedBooking->customer_name.' ('.substr($matchedBooking->customer_phone, 0, 4).'***)') : null,
                 'booking_status' => $includeCustomer ? $matchedBooking?->status : null,
@@ -874,7 +914,9 @@ class BookingService
      */
     public function getVenueTimeline(Venue $venue, string $date, bool $includeCustomer = false): array
     {
+        $this->cancelUnpaidBookings(Booking::PAYMENT_TIMEOUT_MINUTES, null, $venue->id);
         $courts = Court::where('venue_id', $venue->id)->orderBy('id')->get();
+        $holds = DB::table('booking_holds')->whereIn('court_id', $courts->pluck('id'))->where('booking_date', $date)->where('expires_at', '>', now())->get();
         $bookings = Booking::where('venue_id', $venue->id)
             ->whereDate('booking_date', $date)
             ->whereNotIn('status', ['cancelled'])
@@ -907,6 +949,7 @@ class BookingService
                 $startsAt = Carbon::parse($date.' '.$slotHour);
                 $minimumEnd = $startsAt->copy()->addMinutes($court->min_booking_minutes);
                 $hasConflict = $bookings->contains(fn (Booking $booking): bool => $booking->court_id === $court->id && substr($booking->start_time, 0, 5) < $minimumEnd->format('H:i') && substr($booking->end_time, 0, 5) > $slotHour);
+                $held = $holds->contains(fn ($hold): bool => (int) $hold->court_id === $court->id && substr($hold->start_time, 0, 5) < $minimumEnd->format('H:i') && substr($hold->end_time, 0, 5) > $slotHour);
                 $matchedBooking = $bookings->first(function ($b) use ($court, $slotHour, $row) {
                     if ($b->court_id !== $court->id) {
                         return false;
@@ -919,7 +962,8 @@ class BookingService
                     'court_id' => $court->id,
                     'court_name' => $court->name,
                     'is_booked' => $matchedBooking !== null,
-                    'available' => ! $hasConflict && $court->status === 'active' && $venue->status === 'active' && $venue->admin_suspended_at === null && $startsAt->gte(now()) && (int) Carbon::parse($date.' '.$venue->open_time)->diffInMinutes($startsAt) % max(15, (int) $court->slot_minutes) === 0 && $minimumEnd->lte($close),
+                    'is_held' => $held,
+                    'available' => ! $held && ! $hasConflict && $court->status === 'active' && $venue->status === 'active' && $venue->admin_suspended_at === null && $startsAt->gte(now()) && (int) Carbon::parse($date.' '.$venue->open_time)->diffInMinutes($startsAt) % max(15, (int) $court->slot_minutes) === 0 && $minimumEnd->lte($close),
                     'is_peak' => $slotHour >= substr($court->peak_start, 0, 5) && $slotHour < substr($court->peak_end, 0, 5),
                     'start_time' => $includeCustomer ? $matchedBooking?->start_time : null,
                     'end_time' => $includeCustomer ? $matchedBooking?->end_time : null,

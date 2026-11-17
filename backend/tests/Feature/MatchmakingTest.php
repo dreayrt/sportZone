@@ -7,14 +7,11 @@ use App\Models\MatchPost;
 use App\Models\SportCategory;
 use App\Models\User;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class MatchmakingTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function createApplication(): Application
     {
         $app = parent::createApplication();

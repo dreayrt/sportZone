@@ -244,7 +244,9 @@ class AuthController extends BaseController
 
             return $this->successResponse(['url' => $url], 'Chuyển hướng đến '.ucfirst($provider).' OAuth.');
         } catch (\Exception $e) {
-            return $this->errorResponse('Không thể khởi tạo OAuth: '.$e->getMessage(), 500);
+            report($e);
+
+            return $this->errorResponse('Không thể khởi tạo đăng nhập Google. Vui lòng thử lại sau.', 500);
         }
     }
 
@@ -359,17 +361,22 @@ class AuthController extends BaseController
                 return $user;
             });
 
+            if ($user->status !== 'active') {
+                return redirect()->away(rtrim(config('services.frontend_url'), '/').'/auth/login?error='.urlencode('Tài khoản đã bị khóa.'));
+            }
+
             $token = $user->createToken('auth_token')->plainTextToken;
 
             // Redirect về frontend với token
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            $frontendUrl = rtrim(config('services.frontend_url'), '/');
             $redirectUrl = $frontendUrl.'/auth/callback/'.$provider.'?token='.$token;
 
             return redirect()->away($redirectUrl);
 
         } catch (\Exception $e) {
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $errorUrl = $frontendUrl.'/auth/login?error='.urlencode('OAuth thất bại: '.$e->getMessage());
+            report($e);
+            $frontendUrl = rtrim(config('services.frontend_url'), '/');
+            $errorUrl = $frontendUrl.'/auth/login?error='.urlencode('Đăng nhập Google thất bại. Vui lòng thử lại hoặc đăng nhập bằng mật khẩu.');
 
             return redirect()->away($errorUrl);
         }
@@ -423,7 +430,7 @@ class AuthController extends BaseController
      */
     protected function handleLinkCallback(Request $request, string $provider): RedirectResponse
     {
-        $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+        $frontendUrl = rtrim(config('services.frontend_url'), '/');
 
         $fail = function (string $fallbackRedirect, string $message) use ($frontendUrl) {
             $sep = str_contains($fallbackRedirect, '?') ? '&' : '?';

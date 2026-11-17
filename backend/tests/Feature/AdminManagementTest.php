@@ -10,15 +10,12 @@ use App\Models\User;
 use App\Models\Venue;
 use App\Services\SePayQrService;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AdminManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function createApplication(): Application
     {
         $app = parent::createApplication();

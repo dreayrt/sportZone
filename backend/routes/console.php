@@ -3,6 +3,7 @@
 use App\Models\Booking;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -19,3 +20,4 @@ Schedule::command('bookings:cancel-unpaid --minutes='.Booking::PAYMENT_TIMEOUT_M
 
 // Tự động quét và chuyển đơn quá giờ chưa check-in thành Khách không đến (no_show) mỗi 10 phút
 Schedule::command('bookings:mark-no-shows')->everyTenMinutes();
+Schedule::call(fn () => DB::table('booking_holds')->where('expires_at', '<=', now())->delete())->hourly();

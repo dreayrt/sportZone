@@ -99,10 +99,14 @@ export function OwnerBookingForm({
     if (!courtId || !date) return;
     const ac = new AbortController();
     let sequence = 0;
+    let fetching = false;
+    let initial = true;
     const refresh = async () => {
+      if (fetching) return;
+      fetching = true;
       const id = ++sequence;
       setNow(Date.now());
-      setCalendarLoading(true);
+      if (initial) setCalendarLoading(true);
       setCalendarError("");
       try {
         const data = await venueRequest<Slots>(
@@ -115,11 +119,13 @@ export function OwnerBookingForm({
           setCalendarError(e instanceof Error ? e.message : "Không tải được lịch sân.");
         }
       } finally {
+        fetching = false;
+        initial = false;
         if (!ac.signal.aborted && id === sequence) setCalendarLoading(false);
       }
     };
     void refresh();
-    const timer = setInterval(() => void refresh(), 30000);
+    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 3000);
     window.addEventListener("focus", refresh);
     return () => {
       ac.abort();

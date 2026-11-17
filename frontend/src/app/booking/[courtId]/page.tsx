@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatVND, formatDate } from '@/lib/utils';
 import { api, apiRequest, SepayPaymentQr } from '@/lib/api';
+import type { Booking } from '@/lib/mock-data';
 import {
   CalendarDays,
   Clock,
@@ -51,8 +52,12 @@ interface BookingSlot {
   rate: number;
   peak: boolean;
   is_booked: boolean;
-  state: 'available' | 'booked' | 'past' | 'closed';
+  state: 'available' | 'held' | 'booked' | 'past' | 'closed';
+  is_own_hold?: boolean;
+  hold_expires_at?: string | null;
 }
+
+type RecurrencePolicy = Record<'weekly' | 'monthly', { min_occurrences: number; max_occurrences: number; discount_percent: number }>;
 
 export default function BookingWizardPage() {
   const params = useParams();
@@ -76,6 +81,15 @@ export default function BookingWizardPage() {
   const [isSlotsLoading, setIsSlotsLoading] = useState(true);
   const [refreshSlots, setRefreshSlots] = useState(0);
   const voucherRequestId = useRef(0);
+  const holdRequestId = useRef(0);
+  const holdRef = useRef<string | null>(null);
+  const [hold, setHold] = useState<{ token: string; expires_at: string; dates: string[]; discount_percent: number } | null>(null);
+  const [holding, setHolding] = useState(false);
+  const [holdSecondsLeft, setHoldSecondsLeft] = useState(0);
+  const [frequency, setFrequency] = useState<'' | 'weekly' | 'monthly'>('');
+  const [occurrences, setOccurrences] = useState(4);
+  const [recurrencePolicy, setRecurrencePolicy] = useState<RecurrencePolicy | null>(null);
+  const [seriesBookings, setSeriesBookings] = useState<Booking[]>([]);
 
   // State
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
@@ -116,13 +130,18 @@ export default function BookingWizardPage() {
     setApiSlots([]);
     setSelectedSlot('');
     setSlotsError('');
+    let fetching = false;
     async function fetchSlots() {
+      if (fetching) return;
+      fetching = true;
       const res = await api.bookings.getCourtSlots(courtId, bookingDate);
+      fetching = false;
       if (!isMounted) return;
       if (res.success && res.data) {
         setSelectedCourt(res.data.court);
+        setRecurrencePolicy(res.data.recurrence_policy || null);
         setApiSlots(res.data.slots || []);
-        setSelectedSlot((current) => res.data.slots.some((slot: BookingSlot) => slot.time === current && !slot.is_booked) ? current : '');
+        setSelectedSlot((current) => res.data.slots.some((slot: BookingSlot) => slot.time === current && (!slot.is_booked || slot.is_own_hold)) ? current : '');
         setSlotsError('');
       } else {
         setApiSlots([]);
@@ -132,9 +151,71 @@ export default function BookingWizardPage() {
       setIsSlotsLoading(false);
     }
     fetchSlots();
-    const interval = window.setInterval(fetchSlots, 30000);
-    return () => { isMounted = false; window.clearInterval(interval); };
+    const interval = window.setInterval(() => { if (!document.hidden) void fetchSlots(); }, 3000);
+    const onFocus = () => void fetchSlots();
+    window.addEventListener('focus', onFocus);
+    return () => { isMounted = false; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };
   }, [courtId, bookingDate, refreshSlots, createdBookingCode]);
+
+  useEffect(() => {
+    setHold(null);
+    setHolding(false);
+    return () => {
+      holdRequestId.current += 1;
+      if (holdRef.current) void api.bookings.releaseHold(holdRef.current);
+      holdRef.current = null;
+    };
+  }, [courtId, bookingDate]);
+
+  useEffect(() => {
+    if (!hold || createdBookingCode) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((new Date(hold.expires_at).getTime() - Date.now()) / 1000));
+      setHoldSecondsLeft(remaining);
+      if (remaining === 0) {
+        holdRef.current = null;
+        setHold(null);
+        setSelectedSlot('');
+        setCurrentStep(1);
+        setErrorMessage('Hết 5 phút giữ chỗ. Vui lòng chọn lại khung giờ.');
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [hold, createdBookingCode]);
+
+  const clearHold = () => {
+    holdRequestId.current += 1;
+    if (holdRef.current) void api.bookings.releaseHold(holdRef.current);
+    holdRef.current = null;
+    setHold(null);
+    setSelectedSlot('');
+    setHolding(false);
+  };
+
+  const selectSlot = async (slot: BookingSlot) => {
+    const id = ++holdRequestId.current;
+    setHolding(true);
+    setSelectedSlot(slot.time);
+    setErrorMessage('');
+    const response = await api.bookings.hold({ court_id: courtId, booking_date: bookingDate,
+      start_time: slot.start_time.slice(0, 5), end_time: slot.end_time.slice(0, 5),
+      ...(frequency ? { frequency, occurrences } : {}),
+    });
+    if (id !== holdRequestId.current) {
+      if (response.success && response.data) void api.bookings.releaseHold(response.data.token);
+      return;
+    }
+    setHolding(false);
+    if (response.success && response.data) {
+      holdRef.current = response.data.token;
+      setHold(response.data);
+    } else {
+      clearHold();
+      setErrorMessage(Object.values(response.errors || {}).flat().join(' ') || response.message || 'Không thể giữ khung giờ này.');
+    }
+  };
 
   useEffect(() => {
     if (!selectedCourt?.venue_id) return;
@@ -171,8 +252,11 @@ export default function BookingWizardPage() {
     return sum + (addon ? addon.price * count : 0);
   }, 0);
 
-  const subtotal = courtFee + addonsFee;
-  const totalPrice = serverBooking?.total_price ?? Math.max(0, subtotal - appliedDiscount);
+  const bookingCount = frequency ? occurrences : 1;
+  const recurringPercent = frequency ? recurrencePolicy?.[frequency].discount_percent ?? 0 : 0;
+  const recurringDiscount = Math.round(courtFee * recurringPercent / 100) * bookingCount;
+  const subtotal = (courtFee + addonsFee) * bookingCount;
+  const totalPrice = serverBooking?.total_price ?? Math.max(0, subtotal - appliedDiscount - recurringDiscount);
   const displayedDiscount = serverBooking?.discount_amount ?? appliedDiscount;
 
   useEffect(() => {
@@ -180,7 +264,7 @@ export default function BookingWizardPage() {
     setAppliedVoucherCode('');
     setAppliedDiscount(0);
     setVoucherMessage('');
-  }, [subtotal, bookingDate, selectedSlot, courtId]);
+  }, [subtotal, bookingDate, selectedSlot, courtId, frequency]);
 
   const handleApplyVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +297,7 @@ export default function BookingWizardPage() {
   };
 
   const handleStartPayment = async () => {
-    if (!createdBookingCode && (!currentSlotObj || currentSlotObj.is_booked || !customerName.trim() || !customerPhone.trim())) {
+    if (!createdBookingCode && (!currentSlotObj || (currentSlotObj.is_booked && !currentSlotObj.is_own_hold) || !hold || holding || new Date(hold.expires_at).getTime() <= Date.now() || !customerName.trim() || !customerPhone.trim())) {
       setErrorMessage('Vui lòng chọn khung giờ còn trống, nhập họ tên và số điện thoại liên hệ.');
       setCurrentStep(1);
       return;
@@ -230,7 +314,7 @@ export default function BookingWizardPage() {
           .filter(([, quantity]) => quantity > 0)
           .map(([id, quantity]) => ({ addon_id: Number(id), quantity }));
 
-        const bookingResponse = await api.bookings.create({
+        const payload = {
           court_id: selectedCourt!.id,
           booking_date: bookingDate,
           start_time: startTime,
@@ -241,15 +325,27 @@ export default function BookingWizardPage() {
           note: note.trim() || undefined,
           addons: addonsPayload,
           voucher_code: appliedVoucherCode || undefined,
-        });
+          hold_token: hold!.token,
+          ...(frequency ? { frequency, occurrences } : {}),
+        };
+        const result = frequency ? await api.bookings.createRecurring(payload) : await api.bookings.create(payload);
+        if (frequency && result.success && result.data?.bookings) setSeriesBookings(result.data.bookings);
+        const bookingResponse = frequency && result.success ? { ...result, data: result.data.bookings[0] } : result;
 
         if (!bookingResponse.success || !bookingResponse.data?.booking_code) {
           const details = Object.values(bookingResponse.errors || {}).flat().filter((value): value is string => typeof value === 'string');
           setErrorMessage(details.join(' ') || bookingResponse.message || 'Không thể tạo đơn đặt sân.');
+          if (bookingResponse.errors?.slot || bookingResponse.errors?.hold_token) {
+            clearHold();
+            setCurrentStep(1);
+            setRefreshSlots((value) => value + 1);
+          }
           return;
         }
 
         bookingCode = bookingResponse.data.booking_code;
+        holdRef.current = null;
+        setHold(null);
         setCreatedBookingCode(bookingCode);
         setServerBooking(bookingResponse.data);
         setPaymentStatus(bookingResponse.data.payment_status || 'unpaid');
@@ -284,29 +380,36 @@ export default function BookingWizardPage() {
 
   useEffect(() => {
     if (currentStep !== 4 || !createdBookingCode || isSuccess) return;
-
+    let active = true;
+    let checking = false;
     const checkStatus = async () => {
-      const response = await api.payments.getStatus(createdBookingCode);
-      if (!response.success || !response.data) return;
+      if (checking) return;
+      checking = true;
+      try {
+        const response = await api.payments.getStatus(createdBookingCode);
+        if (!active || !response.success || !response.data) return;
 
-      setPaymentStatus(response.data.payment_status as typeof paymentStatus);
-      setTotalPaid(response.data.total_paid || 0);
-      setIsPaymentExpired(response.data.is_expired);
-      const isClosed = ['cancelled', 'completed', 'no_show'].includes(response.data.status);
-      setIsBookingClosed(isClosed);
-      setServerBooking((current: any) => current ? { ...current, total_price: response.data.total_price } : current);
-      const remainingAmount = Math.max(0, response.data.total_price - response.data.total_paid);
-      if (!response.data.is_paid && !response.data.is_expired && !isClosed && paymentQr && paymentQr.amount !== remainingAmount) {
-        const qrResponse = await api.payments.generateQr(createdBookingCode);
-        if (qrResponse.success && qrResponse.data?.payment) setPaymentQr(qrResponse.data.payment);
-      }
-      if (response.data.is_paid) setIsSuccess(true);
-      if (response.data.status === 'cancelled') setErrorMessage('Đơn đã hết thời gian giữ chỗ. Vui lòng tạo đơn mới.');
+        setPaymentStatus(response.data.payment_status);
+        setTotalPaid(response.data.total_paid || 0);
+        setIsPaymentExpired(response.data.is_expired);
+        const isClosed = ['cancelled', 'completed', 'no_show'].includes(response.data.status);
+        setIsBookingClosed(isClosed);
+        setServerBooking((current: any) => current ? { ...current, total_price: response.data.total_price } : current);
+        const remainingAmount = Math.max(0, response.data.total_price - response.data.total_paid);
+        if (!response.data.is_paid && !response.data.is_expired && !isClosed && paymentQr && paymentQr.amount !== remainingAmount) {
+          const qrResponse = await api.payments.generateQr(createdBookingCode);
+          if (!active) return;
+          if (qrResponse.success && qrResponse.data?.payment) setPaymentQr(qrResponse.data.payment);
+        }
+        setSeriesBookings((bookings) => bookings.map((booking) => booking.booking_code === createdBookingCode ? { ...booking, payment_status: response.data.payment_status, status: response.data.status } : booking));
+        if (response.data.is_paid) setIsSuccess(true);
+        if (response.data.status === 'cancelled') setErrorMessage('Đơn đã hết thời gian giữ chỗ. Vui lòng tạo đơn mới.');
+      } finally { checking = false; }
     };
 
     checkStatus();
     const intervalId = window.setInterval(checkStatus, 5000);
-    return () => window.clearInterval(intervalId);
+    return () => { active = false; window.clearInterval(intervalId); };
   }, [currentStep, createdBookingCode, isSuccess, paymentQr]);
 
   useEffect(() => {
@@ -319,6 +422,27 @@ export default function BookingWizardPage() {
     const intervalId = window.setInterval(updateCountdown, 1000);
     return () => window.clearInterval(intervalId);
   }, [paymentQr]);
+
+  const payOccurrence = async (booking: Booking) => {
+    setIsSubmitting(true);
+    setErrorMessage('');
+    setPaymentQr(null);
+    setServerBooking(booking);
+    setCreatedBookingCode(booking.booking_code);
+    setIsSuccess(booking.payment_status === 'paid');
+    setPaymentStatus(booking.payment_status);
+    setTotalPaid(0);
+    setIsPaymentExpired(false);
+    setIsBookingClosed(booking.status === 'cancelled');
+    setCurrentStep(4);
+    try {
+      if (booking.payment_status !== 'paid' && booking.status !== 'cancelled') {
+        const response = await api.payments.generateQr(booking.booking_code);
+        if (response.success && response.data?.payment) setPaymentQr(response.data.payment);
+        else setErrorMessage(response.message || 'Chưa lấy được QR thanh toán.');
+      }
+    } finally { setIsSubmitting(false); }
+  };
 
   // Đang kiểm tra auth hoặc sắp redirect -> hiện loading, tránh nháy nội dung
   if (isAuthLoading || !user) {
@@ -375,6 +499,20 @@ export default function BookingWizardPage() {
         </div>
       )}
 
+      {hold && !createdBookingCode && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {holding ? 'Đang kiểm tra lịch...' : `Đã giữ ${hold.dates.length} lượt cho bạn · còn ${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')}.`}
+        <button type="button" className="ml-3 underline" disabled={holding} onClick={() => { clearHold(); setCurrentStep(1); setRefreshSlots((value) => value + 1); }}>Hủy giữ chỗ</button>
+      </p>}
+
+      {seriesBookings.length > 0 && <Card><CardHeader><CardTitle>Lịch đặt định kỳ của bạn</CardTitle></CardHeader><CardContent className="space-y-3">
+        <p className="text-xs text-neutral-500">Tổng cả gói: {formatVND(seriesBookings.reduce((sum, booking) => sum + booking.total_price, 0))}. Thanh toán riêng từng lượt trong 30 phút; lượt chưa thanh toán sẽ được tự giải phóng.</p>
+        <div className="divide-y divide-neutral-100">{seriesBookings.map((booking) => <div key={booking.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-xs">
+          <span>{formatDate(booking.booking_date.slice(0, 10))} · {booking.start_time.slice(0, 5)} – {booking.end_time.slice(0, 5)} · {booking.booking_code}</span>
+          <span>{formatVND(booking.total_price)} · {booking.status === 'cancelled' ? 'Đã hủy' : booking.payment_status === 'paid' ? 'Đã thanh toán' : 'Chờ thanh toán'}</span>
+          <Button size="sm" variant="outline" disabled={isSubmitting || booking.status === 'cancelled'} onClick={() => void payOccurrence(booking)}>{booking.payment_status === 'paid' ? 'Xem lượt' : 'Thanh toán lượt này'}</Button>
+        </div>)}</div>
+      </CardContent></Card>}
+
       {isSuccess ? (
         <Card className="p-8 text-center space-y-5 border-sport-200 bg-sport-50/20">
           <div className="w-14 h-14 rounded-full bg-sport-500 text-white flex items-center justify-center mx-auto shadow-sm">
@@ -393,7 +531,7 @@ export default function BookingWizardPage() {
           <div className="p-4 bg-white dark:bg-neutral-900 rounded-xl max-w-sm mx-auto border border-neutral-200 dark:border-neutral-800 text-xs space-y-1.5 text-left">
             <p><strong>Người đặt:</strong> {customerName} ({customerPhone})</p>
             <p><strong>Sân:</strong> {selectedCourt.name}</p>
-            <p><strong>Giờ chơi:</strong> {selectedSlot} ngày {formatDate(bookingDate)}</p>
+            <p><strong>Giờ chơi:</strong> {serverBooking ? `${serverBooking.start_time.slice(0, 5)} – ${serverBooking.end_time.slice(0, 5)}` : selectedSlot} ngày {formatDate(serverBooking?.booking_date.slice(0, 10) || bookingDate)}</p>
             <p><strong>Tổng thanh toán:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(serverBooking?.total_price ?? totalPrice)}</span></p>
           </div>
 
@@ -423,6 +561,27 @@ export default function BookingWizardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
+                  <div className="rounded-xl border border-neutral-200 p-4 space-y-3">
+                    <label className="block text-xs font-semibold" htmlFor="booking-frequency">Lịch đặt sân</label>
+                    <select id="booking-frequency" value={frequency} disabled={holding} onChange={(event) => {
+                      clearHold();
+                      const next = event.target.value as typeof frequency;
+                      setFrequency(next);
+                      setOccurrences(next ? recurrencePolicy?.[next].min_occurrences ?? 4 : 4);
+                    }} className="w-full rounded-lg border border-neutral-200 bg-white dark:bg-neutral-900 p-2 text-sm">
+                      <option value="">Đặt một lần</option>
+                      <option value="weekly">Cùng giờ mỗi tuần · giảm {recurrencePolicy?.weekly.discount_percent ?? 0}% tiền sân</option>
+                      <option value="monthly">Cùng ngày mỗi tháng · giảm {recurrencePolicy?.monthly.discount_percent ?? 0}% tiền sân</option>
+                    </select>
+                    {frequency && <>
+                      <label className="block text-xs" htmlFor="booking-occurrences">Số lượt (gồm ngày đầu tiên)</label>
+                      <select id="booking-occurrences" value={occurrences} disabled={holding} onChange={(event) => { clearHold(); setOccurrences(Number(event.target.value)); }} className="w-full rounded-lg border border-neutral-200 bg-white dark:bg-neutral-900 p-2 text-sm">
+                        {Array.from({ length: (recurrencePolicy?.[frequency].max_occurrences ?? 12) - (recurrencePolicy?.[frequency].min_occurrences ?? 4) + 1 }, (_, index) => (recurrencePolicy?.[frequency].min_occurrences ?? 4) + index).map((count) => <option key={count} value={count}>{count} lượt</option>)}
+                      </select>
+                      <p className="text-xs text-neutral-500">Dịch vụ áp dụng cho từng lượt. Ưu đãi định kỳ không cộng dồn voucher. Tháng không có ngày tương ứng sẽ đặt vào ngày cuối tháng.</p>
+                    </>}
+                    {hold && frequency && <p className="text-xs text-emerald-700">Các ngày: {hold.dates.map((date) => formatDate(date)).join(' · ')}</p>}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" size="sm" aria-label="Ngày trước" disabled={bookingDate <= localDate()} onClick={() => shiftBookingDate(-1)}><ArrowLeft className="w-4 h-4" /></Button>
                     <label htmlFor="booking-date" className="text-xs text-neutral-500">Ngày đặt sân</label>
@@ -445,6 +604,7 @@ export default function BookingWizardPage() {
                       <div className="flex flex-wrap gap-3">
                         <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Còn trống</span>
                         <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-indigo-400" />Đã đặt</span>
+                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Đang giữ</span>
                         <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" />Không khả dụng</span>
                       </div>
                     </div>
@@ -459,12 +619,13 @@ export default function BookingWizardPage() {
                           <button
                             key={s.time}
                             type="button"
-                            disabled={isBooked}
+                            disabled={holding || isBooked}
                             aria-pressed={isSelected}
-                            aria-label={`${s.time}, ${s.state === 'booked' ? 'đã đặt' : isBooked ? 'không khả dụng' : `${formatVND(s.rate)}${s.peak ? ', cao điểm' : ''}`}`}
-                            onClick={() => { setSelectedSlot(s.time); setErrorMessage(''); }}
+                            aria-label={`${s.time}, ${s.state === 'held' ? 'đang được giữ' : s.state === 'booked' ? 'đã đặt' : isBooked ? 'không khả dụng' : `${formatVND(s.rate)}${s.peak ? ', cao điểm' : ''}`}`}
+                            onClick={() => void selectSlot(s)}
                             className={`min-w-0 min-h-24 p-3 rounded-xl border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sport-500 focus-visible:ring-offset-2 ${
                               isSelected ? 'border-sport-600 bg-sport-500 text-white'
+                                : s.state === 'held' ? 'border-amber-200 bg-amber-50 text-amber-800 cursor-not-allowed'
                                 : s.state === 'booked' ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-300 cursor-not-allowed'
                                 : isBooked ? 'border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900 cursor-not-allowed'
                                 : 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
@@ -474,7 +635,7 @@ export default function BookingWizardPage() {
                               <span className="font-semibold text-xs tabular-nums whitespace-nowrap">{s.time.replace(' - ', ' – ')}</span>
                               {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
                             </div>
-                            <p className="mt-2 flex items-center gap-1 text-[11px]"><Clock className="h-3 w-3 shrink-0" />{s.state === 'booked' ? 'Đã đặt' : s.state === 'past' ? 'Đã qua giờ' : isBooked ? 'Không khả dụng' : isSelected ? 'Đang chọn' : 'Còn trống'}</p>
+                            <p className="mt-2 flex items-center gap-1 text-[11px]"><Clock className="h-3 w-3 shrink-0" />{isSelected && hold ? 'Đang giữ cho bạn' : s.state === 'held' ? 'Đang được giữ' : s.state === 'booked' ? 'Đã đặt' : s.state === 'past' ? 'Đã qua giờ' : isBooked ? 'Không khả dụng' : isSelected ? 'Đang kiểm tra...' : 'Còn trống'}</p>
                             {!isBooked && <p className={`mt-1 text-[11px] font-semibold tabular-nums ${isSelected ? 'text-white' : 'text-emerald-700 dark:text-emerald-300'}`}>{formatVND(s.rate)}{s.peak && <span className="ml-1 font-normal">· Cao điểm</span>}</p>}
                           </button>
                         );
@@ -538,7 +699,7 @@ export default function BookingWizardPage() {
                   </div>
 
                   <div className="pt-2 flex justify-end">
-                    <Button variant="primary" size="sm" disabled={isSlotsLoading || !currentSlotObj || currentSlotObj.is_booked || !customerName.trim() || !customerPhone.trim()} onClick={() => { setErrorMessage(''); setCurrentStep(2); }}>
+                    <Button variant="primary" size="sm" disabled={isSlotsLoading || holding || !hold || !currentSlotObj || (currentSlotObj.is_booked && !currentSlotObj.is_own_hold) || !customerName.trim() || !customerPhone.trim()} onClick={() => { setErrorMessage(''); setCurrentStep(2); }}>
                       Tiếp tục: Dịch vụ đi kèm
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
@@ -620,8 +781,8 @@ export default function BookingWizardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-neutral-500">Không có voucher? Bạn vẫn có thể tiếp tục thanh toán theo giá gốc. Giảm giá chỉ được áp dụng khi mã được xác nhận hợp lệ.</p>
-                  <form onSubmit={handleApplyVoucher} className="flex gap-2">
+                  <p className="text-sm text-neutral-500">{frequency ? `Gói định kỳ tự giảm ${recurringPercent}% tiền sân cho mỗi lượt, không cộng dồn voucher.` : 'Bạn có thể nhập voucher hoặc tiếp tục thanh toán.'}</p>
+                  {!frequency && <form onSubmit={handleApplyVoucher} className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Nhập mã voucher"
@@ -640,7 +801,7 @@ export default function BookingWizardPage() {
                     <Button type="submit" variant="secondary" size="sm" disabled={isVoucherValidating || !voucherCode.trim()}>
                       {isVoucherValidating ? 'Đang kiểm tra...' : 'Áp Dụng'}
                     </Button>
-                  </form>
+                  </form>}
 
                   {voucherMessage && <p role="status" className={`text-xs ${appliedVoucherCode ? 'text-emerald-700' : 'text-neutral-500'}`}>{voucherMessage}</p>}
 
@@ -660,8 +821,8 @@ export default function BookingWizardPage() {
                     <Button variant="outline" size="sm" onClick={() => setCurrentStep(2)}>
                       Quay lại
                     </Button>
-                    <Button type="button" variant="primary" size="sm" disabled={isSubmitting || isVoucherValidating} onClick={handleStartPayment}>
-                      {isSubmitting ? 'Đang tạo đơn...' : appliedVoucherCode ? 'Tạo đơn & thanh toán' : 'Thanh toán không dùng voucher'}
+                    <Button type="button" variant="primary" size="sm" disabled={isSubmitting || isVoucherValidating || !hold || holding} onClick={handleStartPayment}>
+                      {isSubmitting ? 'Đang tạo đơn...' : frequency ? `Tạo ${occurrences} lượt & thanh toán` : appliedVoucherCode ? 'Tạo đơn & thanh toán' : 'Thanh toán không dùng voucher'}
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
@@ -734,32 +895,33 @@ export default function BookingWizardPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-500">Ngày đặt:</span>
-                    <strong className="font-mono">{formatDate(bookingDate)}</strong>
+                    <strong className="font-mono">{formatDate(serverBooking?.booking_date.slice(0, 10) || bookingDate)}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-500">Khung giờ:</span>
                     <strong className="tabular-nums">{selectedSlot || 'Chưa chọn'}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-neutral-500">Tiền sân:</span>
-                    <span className="font-mono">{formatVND(courtFee)}</span>
+                    <span className="text-neutral-500">Tiền sân{!serverBooking && frequency ? ` (${bookingCount} lượt)` : ''}:</span>
+                    <span className="font-mono">{formatVND(serverBooking?.court_fee ?? courtFee * bookingCount)}</span>
                   </div>
                   {addonsFee > 0 && (
                     <div className="flex justify-between">
                       <span className="text-neutral-500">Dịch vụ đi kèm:</span>
-                      <span className="font-mono">{formatVND(addonsFee)}</span>
+                      <span className="font-mono">{formatVND(serverBooking?.addons_fee ?? addonsFee * bookingCount)}</span>
                     </div>
                   )}
                   {displayedDiscount > 0 && (
                     <div className="flex justify-between text-sport-600 font-semibold">
-                      <span>Giảm giá voucher:</span>
+                      <span>{frequency ? 'Ưu đãi định kỳ:' : 'Giảm giá voucher:'}</span>
                       <span className="font-mono">-{formatVND(displayedDiscount)}</span>
                     </div>
                   )}
                 </div>
 
+                {!serverBooking && recurringDiscount > 0 && <div className="flex justify-between text-sport-600 font-semibold"><span>Ưu đãi định kỳ ({recurringPercent}%):</span><span>-{formatVND(recurringDiscount)}</span></div>}
                 <div className="flex items-baseline justify-between pt-1">
-                  <span className="font-bold text-sm">Tổng thanh toán:</span>
+                  <span className="font-bold text-sm">{seriesBookings.length ? 'Thanh toán lượt này:' : 'Tổng thanh toán:'}</span>
                   <span className="text-lg font-bold font-mono text-sport-600">
                     {formatVND(totalPrice)}
                   </span>

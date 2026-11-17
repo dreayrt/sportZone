@@ -54,6 +54,9 @@ class Booking extends Model
         'checked_in_at',
         'cancelled_at',
         'cancel_reason',
+        'recurrence_group_id',
+        'recurrence_frequency',
+        'recurrence_discount_percent',
     ];
 
     protected function casts(): array
@@ -64,6 +67,7 @@ class Booking extends Model
             'addons_fee' => 'integer',
             'discount_amount' => 'integer',
             'total_price' => 'integer',
+            'recurrence_discount_percent' => 'integer',
             'checked_in' => 'boolean',
             'checked_in_at' => 'datetime',
             'cancelled_at' => 'datetime',

@@ -132,6 +132,7 @@ class BookingController extends BaseController
             'addons.*.addon_id' => 'required|integer|distinct|exists:addons,id',
             'addons.*.quantity' => 'required|integer|min:1',
             'voucher_code' => 'sometimes|nullable|string|max:50',
+            'hold_token' => 'nullable|uuid',
         ];
 
         if ($isStaffBooking) {
@@ -458,7 +459,7 @@ class BookingController extends BaseController
         ]);
         $date = $validated['date'] ?? now()->toDateString();
 
-        $slots = $this->bookingService->getCourtDaySlots($court, $date, false);
+        $slots = $this->bookingService->getCourtDaySlots($court, $date, false, $request->user('sanctum')?->id);
 
         return $this->successResponse([
             'court' => [
@@ -476,6 +477,7 @@ class BookingController extends BaseController
             ],
             'date' => $date,
             'slots' => $slots,
+            'recurrence_policy' => config('booking.recurrence'),
         ], 'Lấy lịch slot sân thành công');
     }
 

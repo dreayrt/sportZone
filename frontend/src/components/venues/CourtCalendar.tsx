@@ -33,27 +33,29 @@ export default function CourtCalendar({
       setDate(requestedDate);
   }, []);
   useEffect(() => {
-    const ac = new AbortController();
     setData(null);
-    setError("");
-    venueRequest<Slots>(
-      `/${owner ? "owner/" : ""}courts/${courtId}/calendar?date=${date}`,
-      "GET",
-      undefined,
-      ac.signal,
-    )
-      .then(setData)
-      .catch((e) => {
-        if (e.name !== "AbortError") setError(e.message);
-      });
-    return () => ac.abort();
-  }, [courtId, date, owner, refresh]);
+  }, [courtId, date, owner]);
   useEffect(() => {
+    const ac = new AbortController();
+    setError("");
+    let fetching = false;
+    const load = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const result = await venueRequest<Slots>(`/${owner ? "owner/" : ""}courts/${courtId}/calendar?date=${date}`, "GET", undefined, ac.signal);
+        if (!ac.signal.aborted) { setData(result); setError(""); }
+      } catch (error) {
+        if (!ac.signal.aborted) setError(error instanceof Error ? error.message : "Không tải được lịch sân.");
+      } finally { fetching = false; }
+    };
+    void load();
     const timer = setInterval(() => {
-      if (!document.hidden) setRefresh((value) => value + 1);
-    }, 60000);
-    return () => clearInterval(timer);
-  }, []);
+      if (!document.hidden) void load();
+    }, 3000);
+    window.addEventListener("focus", load);
+    return () => { ac.abort(); clearInterval(timer); window.removeEventListener("focus", load); };
+  }, [courtId, date, owner, refresh]);
   const shift = (days: number) => {
     const value = new Date(`${date}T12:00:00`);
     value.setDate(value.getDate() + days);
@@ -142,6 +144,7 @@ export default function CourtCalendar({
                 <span className="h-2 w-2 rounded-full bg-indigo-500" />
                 Đã đặt
               </span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" />Đang giữ</span>
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-slate-400" />
                 {owner ? "Đã qua giờ" : "Không khả dụng"}
@@ -157,7 +160,7 @@ export default function CourtCalendar({
           <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5 xl:grid-cols-5">
             {data.slots.map((slot) => {
               const booking = owner ? slot.booking : null;
-              const tone = slot.state === "booked"
+              const tone = slot.state === "held" ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30" : slot.state === "booked"
                 ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30"
                 : slot.available
                   ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"
@@ -219,6 +222,8 @@ export default function CourtCalendar({
                       <Clock3 className="h-3.5 w-3.5" />
                       {slot.available
                         ? "Trống"
+                        : slot.state === "held"
+                          ? "Đang được giữ"
                         : slot.state === "past"
                           ? "Đã qua giờ"
                           : slot.state === "closed"

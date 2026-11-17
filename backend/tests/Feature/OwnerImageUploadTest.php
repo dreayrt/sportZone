@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -14,8 +13,6 @@ use Tests\TestCase;
 
 class OwnerImageUploadTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function createApplication(): Application
     {
         $app = parent::createApplication();

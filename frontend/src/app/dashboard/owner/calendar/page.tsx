@@ -32,6 +32,7 @@ import {
 import { formatVND } from "@/lib/utils";
 
 interface TimelineSlot {
+  is_held: boolean;
   is_booked: boolean;
   available: boolean;
   is_peak: boolean;
@@ -100,7 +101,7 @@ export default function OwnerCalendarPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (!form && !document.hidden) void load(true);
-    }, 60000);
+    }, 3000);
     return () => clearInterval(timer);
   }, [load, form]);
   const shift = (days: number) => {
@@ -445,6 +446,8 @@ export default function OwnerCalendarPage() {
                                     <Plus className="h-3 w-3" />
                                     Trống
                                   </>
+                                ) : slot?.is_held ? (
+                                  "Đang được giữ"
                                 ) : court.status !== "active" ? (
                                   court.status === "maintenance" ? (
                                     "Bảo trì"

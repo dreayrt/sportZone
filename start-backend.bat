@@ -32,14 +32,17 @@ if not exist "vendor\autoload.php" (
 )
 
 echo ========================================================
-echo   SPORTZONE BACKEND API (Laravel 11)
+echo   SPORTZONE BACKEND API (Laravel 13)
 echo   Endpoint: http://127.0.0.1:8000
 echo   Health Check: http://127.0.0.1:8000/api/v1/health
 echo ========================================================
 echo.
+rem AppServiceProvider runs pending migrations before artisan serve starts the server.
 php artisan serve --port=8000
+set "SERVER_EXIT_CODE=%ERRORLEVEL%"
+if not "%SERVER_EXIT_CODE%"=="0" echo [ERROR] Khoi dong that bai. Kiem tra MySQL, migration va thong bao ben tren.
 pause
-exit /b 0
+exit /b %SERVER_EXIT_CODE%
 
 :prepend_path
 if exist "%~1" set "PATH=%~1;%PATH%"

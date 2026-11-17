@@ -219,6 +219,7 @@ export default function CustomerBookingsPage() {
                       {b.court?.name}
                     </h3>
                     <p className="text-xs text-neutral-500">{b.venue?.name}</p>
+                    {b.recurrence_frequency && <p className="mt-1 text-xs font-medium text-sport-600">Lịch cố định {b.recurrence_frequency === 'weekly' ? 'hằng tuần' : 'hằng tháng'} · ưu đãi {b.recurrence_discount_percent}% tiền sân</p>}
                   </div>
                   <div className="flex items-center gap-1.5">
                     {b.checked_in && (

@@ -87,6 +87,9 @@ export interface Voucher {
 export interface Booking {
   id: number;
   booking_code: string;
+  recurrence_group_id?: string | null;
+  recurrence_frequency?: 'weekly' | 'monthly' | null;
+  recurrence_discount_percent?: number;
   user_id?: number;
   venue_id: number;
   venue?: Venue;

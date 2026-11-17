@@ -3,7 +3,7 @@ setlocal EnableExtensions
 title SportZone Frontend Next.js Server
 
 rem Laragon root: <laragon>\www\sportzone_v2\..\..\..
-for %%I in ("%~dp0..\..\..") do set "LARAGON_ROOT=%%~fI"
+for %%I in ("%~dp0..\..") do set "LARAGON_ROOT=%%~fI"
 
 rem Use Laragon Node when available, otherwise fall back to system Node
 for /d %%D in ("%LARAGON_ROOT%\bin\nodejs\node-*") do if not defined NODE_DIR set "NODE_DIR=%%~fD"

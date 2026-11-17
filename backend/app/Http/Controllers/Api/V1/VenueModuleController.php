@@ -14,6 +14,7 @@ use App\Services\BookingService;
 use App\Services\VenueDirectory;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -497,12 +498,14 @@ class VenueModuleController extends BaseController
 
         // Tự động quét và hoàn tất các đơn hết giờ thi đấu
         app(BookingService::class)->autoFinalizeExpiredBookings(null, $venue->id);
+        app(BookingService::class)->cancelUnpaidBookings(Booking::PAYMENT_TIMEOUT_MINUTES, null, $venue->id);
+        $holds = DB::table('booking_holds')->where('court_id', $court->id)->where('booking_date', $d['date'])->where('expires_at', '>', now())->get();
 
         // Read only: booking creation, locking, cancellation and check-in remain owned by Part 3.
         $bookings = Booking::where('court_id', $court->id)
             ->whereDate('booking_date', $d['date'])
             ->whereIn('status', ['pending', 'confirmed', 'completed', 'no_show'])
-            ->get(['id', 'booking_code', 'start_time', 'end_time', 'customer_name', 'customer_phone', 'status', 'payment_status', 'checked_in']);
+            ->get(['id', 'booking_code', 'start_time', 'end_time', 'customer_name', 'customer_phone', 'status', 'payment_status', 'payment_method', 'checked_in']);
         $minute = fn ($time) => (int) substr($time, 0, 2) * 60 +
             (int) substr($time, 3, 2);
         $clock = fn ($n) => sprintf('%02d:%02d', intdiv($n, 60), $n % 60);
@@ -526,13 +529,16 @@ class VenueModuleController extends BaseController
                     break;
                 }
             }
+            $held = $holds->contains(fn ($hold): bool => $start < $minute($hold->end_time) && $start + $step > $minute($hold->start_time));
+            $blocked = $blocked || $held;
             $slot = [
                 'start' => $clock($start),
                 'end' => $clock($start + $step),
                 'available' => ! $blocked,
             ];
             $past = now()->gt(Carbon::parse($d['date'].' '.$clock($start)));
-            $slot['state'] = $matchedBooking ? 'booked' : ($blocked ? 'closed' : ($past ? 'past' : 'available'));
+            $awaitingPayment = $matchedBooking && $matchedBooking->payment_method === 'vietqr' && $matchedBooking->payment_status === 'unpaid';
+            $slot['state'] = $held || $awaitingPayment ? 'held' : ($matchedBooking ? 'booked' : ($blocked ? 'closed' : ($past ? 'past' : 'available')));
             $slot['available'] = ! $blocked && ! $past;
             if ($owner) {
                 $slot['booking'] = $matchedBooking?->only(['id', 'booking_code', 'start_time', 'end_time', 'customer_name', 'customer_phone', 'status', 'payment_status', 'checked_in']);

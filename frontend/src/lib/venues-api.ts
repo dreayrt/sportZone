@@ -92,7 +92,7 @@ export interface Slots {
     start: string;
     end: string;
     available: boolean;
-    state?: "available" | "booked" | "past" | "closed";
+    state?: "available" | "held" | "booked" | "past" | "closed";
     booking?: {
       id: number;
       booking_code: string;

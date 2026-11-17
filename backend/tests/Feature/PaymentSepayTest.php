@@ -6,15 +6,12 @@ use App\Models\Booking;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class PaymentSepayTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected string $secret = 'sepay-test-secret';
 
     public function createApplication(): Application

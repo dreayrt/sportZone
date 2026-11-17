@@ -10,15 +10,12 @@ use App\Models\SportCategory;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Foundation\Application;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AdminVenueManagementTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function createApplication(): Application
     {
         $app = parent::createApplication();

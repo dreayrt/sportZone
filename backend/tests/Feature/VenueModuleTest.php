@@ -8,15 +8,13 @@ use App\Models\Court;
 use App\Models\SportCategory;
 use App\Models\User;
 use App\Models\Venue;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Application;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class VenueModuleTest extends TestCase
 {
-    use RefreshDatabase;
-
-    public function createApplication()
+    public function createApplication(): Application
     {
         $app = parent::createApplication();
         // Enforce isolation even if this class is picked up by the default test suite.
