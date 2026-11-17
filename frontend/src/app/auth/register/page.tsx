@@ -8,7 +8,6 @@ import { api } from '@/lib/api';
 import { getSafeRedirect, getDashboardByRole, getRequiredRoleForPath, savePendingRedirect } from '@/lib/auth-redirect';
 import { Button } from '@/components/ui/Button';
 import { AlertCircle, Building2, Info, Lock, Mail, Phone, User } from 'lucide-react';
-import { FacebookLogo } from '@phosphor-icons/react/dist/csr/FacebookLogo';
 import { GoogleLogo } from '@phosphor-icons/react/dist/csr/GoogleLogo';
 import { TurnstileWidget } from '@/components/auth/TurnstileWidget';
 import { AuthShell, authFieldErrorClass, authInputClass, authLabelClass } from '@/components/auth/AuthShell';
@@ -104,7 +103,7 @@ function RegisterForm() {
   const [captchaResetKey, setCaptchaResetKey] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSocialLoading, setIsSocialLoading] = useState<'google' | 'facebook' | null>(null);
+  const [isSocialLoading, setIsSocialLoading] = useState<'google' | null>(null);
 
   const strength = getStrength(password);
 
@@ -179,7 +178,7 @@ function RegisterForm() {
     }
   };
 
-  const handleSocialLogin = async (provider: 'google' | 'facebook') => {
+  const handleSocialLogin = async (provider: 'google') => {
     setErrorMsg('');
     setIsSocialLoading(provider);
     try {
@@ -390,11 +389,10 @@ function RegisterForm() {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Hoặc đăng ký với</span>
             <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-800" />
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {(
               [
                 { id: 'google', label: 'Google', Icon: GoogleLogo },
-                { id: 'facebook', label: 'Facebook', Icon: FacebookLogo },
               ] as const
             ).map(({ id, label, Icon }) => (
               <button

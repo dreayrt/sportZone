@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\SportCategory;
 use App\Models\User;
 use App\Models\Venue;
+use App\Models\Voucher;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -602,6 +603,66 @@ class OwnerOperationsTest extends TestCase
         $this->postJson('/api/v1/bookings/'.$booking->id.'/cancel')->assertOk()->assertJsonPath('data.status', 'cancelled');
 
         $this->assertDatabaseHas('bookings', ['id' => $booking->id, 'status' => 'cancelled', 'cancel_reason' => 'Khách hàng yêu cầu hủy đơn']);
+    }
+
+    public static function optionalVoucherInputs(): array
+    {
+        return [
+            'omitted' => [[], 0],
+            'null' => [['voucher_code' => null], 0],
+            'empty' => [['voucher_code' => ''], 0],
+            'whitespace' => [['voucher_code' => '   '], 0],
+            'valid voucher' => [['voucher_code' => '  SAVE25  '], 25000],
+        ];
+    }
+
+    #[DataProvider('optionalVoucherInputs')]
+    public function test_customer_checkout_only_applies_a_voucher_when_provided(array $input, int $discount): void
+    {
+        $this->travelTo('2026-11-12 10:00:00');
+        [, , $court] = $this->facility();
+        $voucher = Voucher::create([
+            'code' => 'SAVE25', 'name' => 'Giảm 25.000đ', 'discount_type' => 'fixed', 'discount_value' => 25000,
+            'min_order_value' => 0, 'usage_limit' => 5, 'used_count' => 0,
+            'starts_at' => now()->subDay(), 'ends_at' => now()->addDay(), 'status' => 'active',
+        ]);
+        Sanctum::actingAs($this->user('customer'));
+
+        $response = $this->postJson('/api/v1/bookings', $this->payload($court, array_merge([
+            'source' => 'website', 'discount_amount' => 99999, 'total_price' => 1,
+        ], $input)))->assertCreated()->assertJsonPath('data.discount_amount', $discount)
+            ->assertJsonPath('data.total_price', 100000 - $discount)
+            ->assertJsonPath('data.voucher_id', $discount > 0 ? $voucher->id : null);
+
+        $this->assertDatabaseHas('bookings', ['id' => $response->json('data.id'), 'discount_amount' => $discount, 'total_price' => 100000 - $discount]);
+        $this->assertDatabaseHas('vouchers', ['id' => $voucher->id, 'used_count' => $discount > 0 ? 1 : 0]);
+    }
+
+    public function test_checkout_rejects_an_invalid_voucher_without_creating_a_booking(): void
+    {
+        $this->travelTo('2026-11-12 10:00:00');
+        [, , $court] = $this->facility();
+
+        $this->postJson('/api/v1/bookings', $this->payload($court, ['source' => 'website', 'voucher_code' => 'NOT-VALID']))
+            ->assertUnprocessable()->assertJsonPath('errors.voucher_code.0', 'Mã giảm giá không tồn tại hoặc không còn khả dụng.');
+
+        $this->assertDatabaseCount('bookings', 0);
+    }
+
+    public function test_checkout_slots_expose_real_court_and_distinguish_past_and_booked_times(): void
+    {
+        $this->travelTo('2026-11-12 10:00:00');
+        [, $venue, $court] = $this->facility();
+        $this->booking($venue, $court);
+
+        $this->getJson('/api/v1/courts/'.$court->id.'/slots?date=2026-11-12')->assertOk()
+            ->assertJsonPath('data.court.venue_id', $venue->id)
+            ->assertJsonPath('data.court.venue_slug', $venue->slug)
+            ->assertJsonPath('data.court.min_booking_minutes', 60)
+            ->assertJsonPath('data.slots.0.state', 'past')
+            ->assertJsonPath('data.slots.0.is_booked', true)
+            ->assertJsonPath('data.slots.12.state', 'booked')
+            ->assertJsonPath('data.slots.12.is_booked', true);
     }
 
     private function user(string $role): User

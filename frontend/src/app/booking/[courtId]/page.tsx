@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { MOCK_VENUES, MOCK_ADDONS, Court, Addon } from '@/lib/mock-data';
+import { Addon, localDate } from '@/lib/venues-api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatVND, formatDate } from '@/lib/utils';
-import { api, SepayPaymentQr } from '@/lib/api';
+import { api, apiRequest, SepayPaymentQr } from '@/lib/api';
 import {
   CalendarDays,
   Clock,
@@ -26,8 +26,33 @@ import {
   User,
   Phone,
   Mail,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
+
+interface BookingCourt {
+  id: number;
+  name: string;
+  venue_id: number;
+  venue_name: string;
+  venue_slug: string;
+  min_booking_minutes: number;
+  slot_minutes: number;
+  hourly_rate_standard: number;
+  hourly_rate_peak: number;
+  peak_start: string;
+  peak_end: string;
+}
+
+interface BookingSlot {
+  time: string;
+  start_time: string;
+  end_time: string;
+  rate: number;
+  peak: boolean;
+  is_booked: boolean;
+  state: 'available' | 'booked' | 'past' | 'closed';
+}
 
 export default function BookingWizardPage() {
   const params = useParams();
@@ -42,28 +67,21 @@ export default function BookingWizardPage() {
     }
   }, [isAuthLoading, user, router, courtId]);
 
-  // Find court across venues
-  let selectedCourt: Court | undefined;
-  let selectedVenue = MOCK_VENUES[0];
-
-  for (const v of MOCK_VENUES) {
-    const c = v.courts?.find((item) => item.id === courtId);
-    if (c) {
-      selectedCourt = c;
-      selectedVenue = v;
-      break;
-    }
-  }
-
-  if (!selectedCourt) {
-    selectedCourt = MOCK_VENUES[0].courts![0];
-  }
+  const [selectedCourt, setSelectedCourt] = useState<BookingCourt | null>(null);
+  const selectedVenue = { id: selectedCourt?.venue_id, name: selectedCourt?.venue_name, slug: selectedCourt?.venue_slug };
+  const [addons, setAddons] = useState<Addon[]>([]);
+  const [addonsError, setAddonsError] = useState('');
+  const [isAddonsLoading, setIsAddonsLoading] = useState(true);
+  const [slotsError, setSlotsError] = useState('');
+  const [isSlotsLoading, setIsSlotsLoading] = useState(true);
+  const [refreshSlots, setRefreshSlots] = useState(0);
+  const voucherRequestId = useRef(0);
 
   // State
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
-  const [bookingDate, setBookingDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedSlot, setSelectedSlot] = useState('18:00 - 19:30');
-  const [addonsCount, setAddonsCount] = useState<Record<number, number>>({ 1: 2, 2: 1 }); // default 2 waters, 1 pocari
+  const [bookingDate, setBookingDate] = useState(localDate);
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const [addonsCount, setAddonsCount] = useState<Record<number, number>>({});
   const [voucherCode, setVoucherCode] = useState('');
   const [appliedVoucherCode, setAppliedVoucherCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
@@ -75,66 +93,81 @@ export default function BookingWizardPage() {
   const [paymentStatus, setPaymentStatus] = useState<'unpaid' | 'partial' | 'paid' | 'refunded'>('unpaid');
   const [totalPaid, setTotalPaid] = useState(0);
   const [paymentSecondsLeft, setPaymentSecondsLeft] = useState(0);
+  const [isPaymentExpired, setIsPaymentExpired] = useState(false);
+  const [isBookingClosed, setIsBookingClosed] = useState(false);
   const [serverBooking, setServerBooking] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   // Customer Contact Info
-  const [customerName, setCustomerName] = useState(user?.full_name || 'Nguyễn Minh Anh');
-  const [customerPhone, setCustomerPhone] = useState(user?.phone || '0912345678');
-  const [customerEmail, setCustomerEmail] = useState(user?.email || 'minhanh@example.com');
+  const [customerName, setCustomerName] = useState(user?.full_name || '');
+  const [customerPhone, setCustomerPhone] = useState(user?.phone || '');
+  const [customerEmail, setCustomerEmail] = useState(user?.email || '');
   const [note, setNote] = useState('');
 
   // Real-time API slots
-  const [apiSlots, setApiSlots] = useState<any[]>([]);
-
-  // Default fallback slots
-  const defaultSlots = [
-    { time: '06:00 - 07:30', start_time: '06:00:00', end_time: '07:30:00', peak: false, rate: selectedCourt.hourly_rate_standard * 1.5, is_booked: false },
-    { time: '07:30 - 09:00', start_time: '07:30:00', end_time: '09:00:00', peak: false, rate: selectedCourt.hourly_rate_standard * 1.5, is_booked: false },
-    { time: '16:30 - 18:00', start_time: '16:30:00', end_time: '18:00:00', peak: false, rate: selectedCourt.hourly_rate_standard * 1.5, is_booked: false },
-    { time: '18:00 - 19:30', start_time: '18:00:00', end_time: '19:30:00', peak: true, rate: selectedCourt.hourly_rate_peak * 1.5, is_booked: false },
-    { time: '19:30 - 21:00', start_time: '19:30:00', end_time: '21:00:00', peak: true, rate: selectedCourt.hourly_rate_peak * 1.5, is_booked: false },
-    { time: '21:00 - 22:30', start_time: '21:00:00', end_time: '22:30:00', peak: false, rate: selectedCourt.hourly_rate_standard * 1.5, is_booked: false },
-  ];
+  const [apiSlots, setApiSlots] = useState<BookingSlot[]>([]);
 
   // Fetch slots from Backend API
   useEffect(() => {
+    if (createdBookingCode) return;
     let isMounted = true;
+    setIsSlotsLoading(true);
+    setApiSlots([]);
+    setSelectedSlot('');
+    setSlotsError('');
     async function fetchSlots() {
-      try {
-        const res = await api.bookings.getCourtSlots(selectedCourt!.id, bookingDate);
-        if (isMounted && res.success && res.data?.slots?.length > 0) {
-          setApiSlots(res.data.slots);
-          const firstOpen = res.data.slots.find((s: any) => !s.is_booked);
-          if (firstOpen) {
-            setSelectedSlot(firstOpen.time);
-          }
-        }
-      } catch (err) {
-        // use fallback defaultSlots
+      const res = await api.bookings.getCourtSlots(courtId, bookingDate);
+      if (!isMounted) return;
+      if (res.success && res.data) {
+        setSelectedCourt(res.data.court);
+        setApiSlots(res.data.slots || []);
+        setSelectedSlot((current) => res.data.slots.some((slot: BookingSlot) => slot.time === current && !slot.is_booked) ? current : '');
+        setSlotsError('');
+      } else {
+        setApiSlots([]);
+        setSelectedSlot('');
+        setSlotsError(res.message || 'Không tải được lịch sân. Vui lòng thử lại.');
       }
+      setIsSlotsLoading(false);
     }
     fetchSlots();
-    return () => { isMounted = false; };
-  }, [selectedCourt?.id, bookingDate]);
+    const interval = window.setInterval(fetchSlots, 30000);
+    return () => { isMounted = false; window.clearInterval(interval); };
+  }, [courtId, bookingDate, refreshSlots, createdBookingCode]);
+
+  useEffect(() => {
+    if (!selectedCourt?.venue_id) return;
+    let active = true;
+    setIsAddonsLoading(true);
+    setAddons([]);
+    setAddonsCount({});
+    setAddonsError('');
+    apiRequest<Addon[]>(`/venue-services/${selectedCourt.venue_id}`).then((response) => {
+      if (!active) return;
+      if (response.success) setAddons(response.data || []);
+      else setAddonsError(response.message || 'Không tải được dịch vụ. Bạn vẫn có thể đặt sân không kèm dịch vụ.');
+      setIsAddonsLoading(false);
+    });
+    return () => { active = false; };
+  }, [selectedCourt?.venue_id]);
 
   useEffect(() => {
     if (user) {
-      if (!customerName || customerName === 'Nguyễn Minh Anh') setCustomerName(user.full_name);
-      if (!customerPhone || customerPhone === '0912345678') setCustomerPhone(user.phone || '');
+      setCustomerName((current) => current || user.full_name);
+      setCustomerPhone((current) => current || user.phone || '');
       if (user.email) setCustomerEmail(user.email);
     }
   }, [user]);
 
-  const activeSlots = apiSlots.length > 0 ? apiSlots : defaultSlots;
+  const activeSlots = apiSlots;
 
   // Fee calculation
-  const currentSlotObj = activeSlots.find((s) => s.time === selectedSlot) || activeSlots[0];
-  const courtFee = currentSlotObj?.rate || selectedCourt.hourly_rate_standard * 1.5;
+  const currentSlotObj = activeSlots.find((s) => s.time === selectedSlot);
+  const courtFee = currentSlotObj?.rate ?? 0;
 
   const addonsFee = Object.entries(addonsCount).reduce((sum, [idStr, count]) => {
-    const addon = MOCK_ADDONS.find((a) => a.id === parseInt(idStr, 10));
+    const addon = addons.find((a) => a.id === parseInt(idStr, 10));
     return sum + (addon ? addon.price * count : 0);
   }, 0);
 
@@ -142,21 +175,30 @@ export default function BookingWizardPage() {
   const totalPrice = serverBooking?.total_price ?? Math.max(0, subtotal - appliedDiscount);
   const displayedDiscount = serverBooking?.discount_amount ?? appliedDiscount;
 
+  useEffect(() => {
+    voucherRequestId.current += 1;
+    setAppliedVoucherCode('');
+    setAppliedDiscount(0);
+    setVoucherMessage('');
+  }, [subtotal, bookingDate, selectedSlot, courtId]);
+
   const handleApplyVoucher = async (e: React.FormEvent) => {
     e.preventDefault();
     const code = voucherCode.trim().toUpperCase();
     if (!code) {
       setAppliedVoucherCode('');
       setAppliedDiscount(0);
-      setVoucherMessage('Nhập mã voucher để kiểm tra.');
+      setVoucherMessage('Không dùng voucher. Đơn được tính theo giá gốc.');
       return;
     }
 
     setIsVoucherValidating(true);
+    const requestId = ++voucherRequestId.current;
     setVoucherMessage('');
     const targetVenueId = selectedVenue?.id ? Number(selectedVenue.id) : undefined;
     const targetCourtId = Number(courtId) || undefined;
     const response = await api.vouchers.validate(code, subtotal, targetVenueId, targetCourtId);
+    if (requestId !== voucherRequestId.current) { setIsVoucherValidating(false); return; }
     if (response.success && response.data?.valid) {
       setAppliedVoucherCode(response.data.voucher.code);
       setVoucherCode(response.data.voucher.code);
@@ -171,13 +213,19 @@ export default function BookingWizardPage() {
   };
 
   const handleStartPayment = async () => {
+    if (!createdBookingCode && (!currentSlotObj || currentSlotObj.is_booked || !customerName.trim() || !customerPhone.trim())) {
+      setErrorMessage('Vui lòng chọn khung giờ còn trống, nhập họ tên và số điện thoại liên hệ.');
+      setCurrentStep(1);
+      return;
+    }
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
       let bookingCode = createdBookingCode;
       if (!bookingCode) {
-        const [startTime = '18:00', endTime = '19:30'] = selectedSlot.split(' - ').map((value) => value.trim());
+        const startTime = currentSlotObj!.start_time.slice(0, 5);
+        const endTime = currentSlotObj!.end_time.slice(0, 5);
         const addonsPayload = Object.entries(addonsCount)
           .filter(([, quantity]) => quantity > 0)
           .map(([id, quantity]) => ({ addon_id: Number(id), quantity }));
@@ -196,7 +244,8 @@ export default function BookingWizardPage() {
         });
 
         if (!bookingResponse.success || !bookingResponse.data?.booking_code) {
-          setErrorMessage(bookingResponse.message || bookingResponse.errors?.slot?.[0] || 'Không thể tạo đơn đặt sân.');
+          const details = Object.values(bookingResponse.errors || {}).flat().filter((value): value is string => typeof value === 'string');
+          setErrorMessage(details.join(' ') || bookingResponse.message || 'Không thể tạo đơn đặt sân.');
           return;
         }
 
@@ -204,6 +253,10 @@ export default function BookingWizardPage() {
         setCreatedBookingCode(bookingCode);
         setServerBooking(bookingResponse.data);
         setPaymentStatus(bookingResponse.data.payment_status || 'unpaid');
+        if (bookingResponse.data.payment_status === 'paid') {
+          setIsSuccess(true);
+          return;
+        }
       }
 
       const qrResponse = await api.payments.generateQr(bookingCode);
@@ -214,11 +267,19 @@ export default function BookingWizardPage() {
       }
 
       setPaymentQr(qrResponse.data.payment);
+      setIsPaymentExpired(new Date(qrResponse.data.payment.expires_at).getTime() <= Date.now());
       setPaymentStatus(qrResponse.data.booking.payment_status as typeof paymentStatus);
       setCurrentStep(4);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const shiftBookingDate = (days: number) => {
+    const date = new Date(`${bookingDate}T12:00:00`);
+    date.setDate(date.getDate() + days);
+    setBookingDate(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`);
+    setErrorMessage('');
   };
 
   useEffect(() => {
@@ -230,9 +291,12 @@ export default function BookingWizardPage() {
 
       setPaymentStatus(response.data.payment_status as typeof paymentStatus);
       setTotalPaid(response.data.total_paid || 0);
+      setIsPaymentExpired(response.data.is_expired);
+      const isClosed = ['cancelled', 'completed', 'no_show'].includes(response.data.status);
+      setIsBookingClosed(isClosed);
       setServerBooking((current: any) => current ? { ...current, total_price: response.data.total_price } : current);
       const remainingAmount = Math.max(0, response.data.total_price - response.data.total_paid);
-      if (!response.data.is_paid && paymentQr && paymentQr.amount !== remainingAmount) {
+      if (!response.data.is_paid && !response.data.is_expired && !isClosed && paymentQr && paymentQr.amount !== remainingAmount) {
         const qrResponse = await api.payments.generateQr(createdBookingCode);
         if (qrResponse.success && qrResponse.data?.payment) setPaymentQr(qrResponse.data.payment);
       }
@@ -249,6 +313,7 @@ export default function BookingWizardPage() {
     if (!paymentQr?.expires_at) return;
     const updateCountdown = () => {
       setPaymentSecondsLeft(Math.max(0, Math.floor((new Date(paymentQr.expires_at).getTime() - Date.now()) / 1000)));
+      if (new Date(paymentQr.expires_at).getTime() <= Date.now()) setIsPaymentExpired(true);
     };
     updateCountdown();
     const intervalId = window.setInterval(updateCountdown, 1000);
@@ -264,8 +329,10 @@ export default function BookingWizardPage() {
     );
   }
 
+  if (!selectedCourt) return <div className="max-w-7xl mx-auto px-4 py-16 text-sm text-neutral-500">{slotsError || 'Đang tải thông tin sân...'}{slotsError && <Button className="ml-3" size="sm" onClick={() => setRefreshSlots((value) => value + 1)}>Thử lại</Button>}</div>;
+
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-6">
       {/* Step Indicator */}
       <div className="space-y-4">
         <Link href={`/venues/${selectedVenue.slug}`} className="text-xs text-neutral-500 hover:text-neutral-900 flex items-center gap-1">
@@ -343,9 +410,9 @@ export default function BookingWizardPage() {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] items-start gap-6">
           {/* Main Wizard Step Box */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* STEP 1: TIME & DATE + CONTACT */}
             {currentStep === 1 && (
               <Card>
@@ -356,29 +423,34 @@ export default function BookingWizardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-5">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                      Chọn ngày đặt sân
-                    </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" aria-label="Ngày trước" disabled={bookingDate <= localDate()} onClick={() => shiftBookingDate(-1)}><ArrowLeft className="w-4 h-4" /></Button>
+                    <label htmlFor="booking-date" className="text-xs text-neutral-500">Ngày đặt sân</label>
                     <input
+                      id="booking-date"
                       type="date"
+                      min={localDate()}
                       value={bookingDate}
-                      onChange={(e) => setBookingDate(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 font-mono"
+                      onChange={(e) => { if (e.target.value) { setBookingDate(e.target.value); setErrorMessage(''); } }}
+                      className="min-w-0 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 tabular-nums"
                     />
+                    <Button type="button" variant="outline" size="sm" aria-label="Ngày sau" onClick={() => shiftBookingDate(1)}><ArrowRight className="w-4 h-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setBookingDate(localDate())}>Hôm nay</Button>
+                    <Button type="button" variant="outline" size="sm" aria-label="Làm mới lịch sân" className="ml-auto" disabled={isSlotsLoading} onClick={() => setRefreshSlots((value) => value + 1)}><RefreshCw className={`w-4 h-4 ${isSlotsLoading ? 'animate-spin' : ''}`} /></Button>
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                        Chọn khung giờ thi đấu (Real-time từ hệ thống)
-                      </label>
-                      <span className="text-[11px] text-neutral-400">
-                        * Giờ cao điểm Peak: 17:00 - 21:00
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-neutral-50 dark:bg-neutral-950 px-3 py-3 text-[11px]">
+                      <span className="text-neutral-500">Mỗi lượt {selectedCourt.min_booking_minutes} phút · {activeSlots.filter((slot) => !slot.is_booked).length} khung giờ còn trống</span>
+                      <div className="flex flex-wrap gap-3">
+                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" />Còn trống</span>
+                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-indigo-400" />Đã đặt</span>
+                        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-400" />Không khả dụng</span>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {slotsError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{slotsError}</p>}
+                    {isSlotsLoading ? <p role="status" className="py-12 text-center text-sm text-neutral-500">Đang tải lịch sân...</p> : activeSlots.length === 0 && !slotsError ? <p className="py-10 text-center text-sm text-neutral-500">Không có khung giờ trong ngày này. Vui lòng chọn ngày khác.</p> : <div role="group" aria-label="Chọn khung giờ thi đấu" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 pt-2">
                       {activeSlots.map((s) => {
                         const isBooked = !!s.is_booked;
                         const isSelected = selectedSlot === s.time;
@@ -388,34 +460,26 @@ export default function BookingWizardPage() {
                             key={s.time}
                             type="button"
                             disabled={isBooked}
-                            onClick={() => !isBooked && setSelectedSlot(s.time)}
-                            className={`p-3.5 rounded-xl border text-left transition-all ${
-                              isBooked
-                                ? 'bg-neutral-100 dark:bg-neutral-850 border-neutral-200 dark:border-neutral-800 opacity-60 cursor-not-allowed'
-                                : isSelected
-                                ? 'border-sport-500 bg-sport-50/60 dark:bg-sport-950/40 ring-1 ring-sport-500'
-                                : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300'
+                            aria-pressed={isSelected}
+                            aria-label={`${s.time}, ${s.state === 'booked' ? 'đã đặt' : isBooked ? 'không khả dụng' : `${formatVND(s.rate)}${s.peak ? ', cao điểm' : ''}`}`}
+                            onClick={() => { setSelectedSlot(s.time); setErrorMessage(''); }}
+                            className={`min-w-0 min-h-24 p-3 rounded-xl border text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sport-500 focus-visible:ring-offset-2 ${
+                              isSelected ? 'border-sport-600 bg-sport-500 text-white'
+                                : s.state === 'booked' ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-300 cursor-not-allowed'
+                                : isBooked ? 'border-slate-200 bg-slate-100 text-slate-400 dark:border-slate-800 dark:bg-slate-900 cursor-not-allowed'
+                                : 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono font-bold text-sm text-neutral-900 dark:text-white">
-                                {s.time}
-                              </span>
-                              {isBooked ? (
-                                <Badge variant="neutral" size="sm">Đã có người đặt</Badge>
-                              ) : s.peak ? (
-                                <Badge variant="warning" size="sm">Giờ Vàng (Peak)</Badge>
-                              ) : (
-                                <Badge variant="neutral" size="sm">Giờ Thường</Badge>
-                              )}
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-semibold text-xs tabular-nums whitespace-nowrap">{s.time.replace(' - ', ' – ')}</span>
+                              {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
                             </div>
-                            <div className="text-xs font-mono font-medium text-sport-600 mt-1">
-                              {isBooked ? 'Không khả dụng' : formatVND(s.rate)}
-                            </div>
+                            <p className="mt-2 flex items-center gap-1 text-[11px]"><Clock className="h-3 w-3 shrink-0" />{s.state === 'booked' ? 'Đã đặt' : s.state === 'past' ? 'Đã qua giờ' : isBooked ? 'Không khả dụng' : isSelected ? 'Đang chọn' : 'Còn trống'}</p>
+                            {!isBooked && <p className={`mt-1 text-[11px] font-semibold tabular-nums ${isSelected ? 'text-white' : 'text-emerald-700 dark:text-emerald-300'}`}>{formatVND(s.rate)}{s.peak && <span className="ml-1 font-normal">· Cao điểm</span>}</p>}
                           </button>
                         );
                       })}
-                    </div>
+                    </div>}
                   </div>
 
                   {/* Customer Information Fields */}
@@ -474,7 +538,7 @@ export default function BookingWizardPage() {
                   </div>
 
                   <div className="pt-2 flex justify-end">
-                    <Button variant="primary" size="sm" onClick={() => setCurrentStep(2)}>
+                    <Button variant="primary" size="sm" disabled={isSlotsLoading || !currentSlotObj || currentSlotObj.is_booked || !customerName.trim() || !customerPhone.trim()} onClick={() => { setErrorMessage(''); setCurrentStep(2); }}>
                       Tiếp tục: Dịch vụ đi kèm
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
@@ -491,7 +555,10 @@ export default function BookingWizardPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                    {MOCK_ADDONS.slice(0, 4).map((addon) => {
+                    {isAddonsLoading && <p role="status" className="py-6 text-sm text-neutral-500">Đang tải dịch vụ...</p>}
+                    {addonsError && <p role="alert" className="py-4 text-sm text-amber-700">{addonsError}</p>}
+                    {!isAddonsLoading && !addonsError && addons.length === 0 && <p className="py-6 text-sm text-neutral-500">Cơ sở chưa có dịch vụ đi kèm. Bạn có thể tiếp tục đặt sân.</p>}
+                    {addons.map((addon) => {
                       const count = addonsCount[addon.id] || 0;
                       return (
                         <div key={addon.id} className="py-3 flex items-center justify-between">
@@ -507,6 +574,8 @@ export default function BookingWizardPage() {
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
+                              aria-label={`Giảm số lượng ${addon.name}`}
+                              disabled={count === 0}
                               onClick={() => setAddonsCount({ ...addonsCount, [addon.id]: Math.max(0, count - 1) })}
                               className="w-7 h-7 rounded-md border border-neutral-200 dark:border-neutral-700 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800"
                             >
@@ -515,6 +584,8 @@ export default function BookingWizardPage() {
                             <span className="w-6 text-center font-mono font-bold text-sm">{count}</span>
                             <button
                               type="button"
+                              aria-label={`Tăng số lượng ${addon.name}`}
+                              disabled={addon.stock_quantity != null && count >= addon.stock_quantity}
                               onClick={() => setAddonsCount({ ...addonsCount, [addon.id]: count + 1 })}
                               className="w-7 h-7 rounded-md border border-neutral-200 dark:border-neutral-700 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800"
                             >
@@ -530,7 +601,7 @@ export default function BookingWizardPage() {
                     <Button variant="outline" size="sm" onClick={() => setCurrentStep(1)}>
                       Quay lại
                     </Button>
-                    <Button variant="primary" size="sm" onClick={() => setCurrentStep(3)}>
+                    <Button variant="primary" size="sm" disabled={isAddonsLoading} onClick={() => { setErrorMessage(''); setCurrentStep(3); }}>
                       Tiếp tục: Mã giảm giá
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
@@ -545,24 +616,28 @@ export default function BookingWizardPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Tag className="w-4 h-4 text-sport-500" strokeWidth={1.5} />
-                    Mã Giảm Giá & Khuyến Mãi
+                    Mã giảm giá (không bắt buộc)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <p className="text-sm text-neutral-500">Không có voucher? Bạn vẫn có thể tiếp tục thanh toán theo giá gốc. Giảm giá chỉ được áp dụng khi mã được xác nhận hợp lệ.</p>
                   <form onSubmit={handleApplyVoucher} className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Nhập mã voucher"
+                      aria-label="Mã voucher (không bắt buộc)"
+                      disabled={isVoucherValidating}
                       value={voucherCode}
                       onChange={(e) => {
+                        voucherRequestId.current += 1;
                         setVoucherCode(e.target.value);
                         setAppliedVoucherCode('');
                         setAppliedDiscount(0);
                         setVoucherMessage('');
                       }}
-                      className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 font-mono uppercase bg-white dark:bg-neutral-900"
+                      className="min-w-0 flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-200 dark:border-neutral-700 font-mono uppercase bg-white dark:bg-neutral-900"
                     />
-                    <Button type="submit" variant="secondary" size="sm" disabled={isVoucherValidating}>
+                    <Button type="submit" variant="secondary" size="sm" disabled={isVoucherValidating || !voucherCode.trim()}>
                       {isVoucherValidating ? 'Đang kiểm tra...' : 'Áp Dụng'}
                     </Button>
                   </form>
@@ -575,7 +650,7 @@ export default function BookingWizardPage() {
                         <CheckCircle2 className="w-4 h-4 text-sport-500" />
                         Đã áp dụng mã {appliedVoucherCode}: Giảm {formatVND(appliedDiscount)}
                       </span>
-                      <button type="button" onClick={() => { setAppliedVoucherCode(''); setAppliedDiscount(0); setVoucherMessage('Đã gỡ voucher.'); }} className="text-neutral-400 hover:text-red-500">
+                      <button type="button" onClick={() => { voucherRequestId.current += 1; setVoucherCode(''); setAppliedVoucherCode(''); setAppliedDiscount(0); setVoucherMessage('Đã gỡ voucher. Đơn được tính theo giá gốc.'); }} className="text-neutral-500 hover:text-red-500">
                         Gỡ mã
                       </button>
                     </div>
@@ -585,8 +660,8 @@ export default function BookingWizardPage() {
                     <Button variant="outline" size="sm" onClick={() => setCurrentStep(2)}>
                       Quay lại
                     </Button>
-                    <Button variant="primary" size="sm" disabled={isSubmitting} onClick={handleStartPayment}>
-                      {isSubmitting ? 'Đang tạo đơn...' : 'Tạo đơn & tiếp tục SePay'}
+                    <Button type="button" variant="primary" size="sm" disabled={isSubmitting || isVoucherValidating} onClick={handleStartPayment}>
+                      {isSubmitting ? 'Đang tạo đơn...' : appliedVoucherCode ? 'Tạo đơn & thanh toán' : 'Thanh toán không dùng voucher'}
                       <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </Button>
                   </div>
@@ -604,7 +679,13 @@ export default function BookingWizardPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 text-center">
-                  {paymentQr ? (
+                  {isPaymentExpired || isBookingClosed ? (
+                    <div role="alert" className="max-w-sm mx-auto rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 space-y-3">
+                      <p>{isPaymentExpired ? 'Đã hết thời gian thanh toán cho đơn này.' : 'Đơn đã kết thúc hoặc đã hủy.'}</p>
+                      <p>{totalPaid > 0 ? `Đã ghi nhận ${formatVND(totalPaid)}. Vui lòng liên hệ chủ sân để đối soát, không chuyển thêm tiền.` : 'Vui lòng kiểm tra trạng thái đơn trước khi đặt lại.'}</p>
+                      <Link href="/dashboard/customer/bookings" className="inline-block font-semibold underline">Xem đơn đặt sân</Link>
+                    </div>
+                  ) : paymentQr ? (
                     <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 max-w-sm mx-auto space-y-3">
                       <img src={paymentQr.qr_image_url} alt="QR thanh toán SePay" className="w-full max-w-[280px] mx-auto h-auto rounded-lg border bg-white shadow-xs" />
                       <div className="text-xs text-neutral-600 dark:text-neutral-300 space-y-1 text-left pt-1">
@@ -622,13 +703,13 @@ export default function BookingWizardPage() {
                     </div>
                   )}
 
-                  <div className="max-w-md mx-auto space-y-2">
+                  {!isPaymentExpired && !isBookingClosed && <div className="max-w-md mx-auto space-y-2">
                     <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
                       {paymentStatus === 'partial' ? `Đã nhận ${formatVND(totalPaid)}. Đang chờ thanh toán đủ.` : 'Mở ứng dụng ngân hàng để quét mã. Hệ thống tự kiểm tra giao dịch SePay.'}
                     </p>
                     {paymentQr && <p className="text-xs text-neutral-500">Mã đơn {createdBookingCode} · QR còn hiệu lực {Math.floor(paymentSecondsLeft / 60)}:{String(paymentSecondsLeft % 60).padStart(2, '0')}</p>}
                     <p className="text-[11px] text-neutral-400">Trang sẽ tự cập nhật khi webhook SePay xác nhận thanh toán.</p>
-                  </div>
+                  </div>}
                 </CardContent>
               </Card>
             )}
@@ -657,7 +738,7 @@ export default function BookingWizardPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-500">Khung giờ:</span>
-                    <strong className="font-mono">{selectedSlot}</strong>
+                    <strong className="tabular-nums">{selectedSlot || 'Chưa chọn'}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-500">Tiền sân:</span>

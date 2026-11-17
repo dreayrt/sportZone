@@ -531,10 +531,10 @@ class VenueModuleController extends BaseController
                 'end' => $clock($start + $step),
                 'available' => ! $blocked,
             ];
+            $past = now()->gt(Carbon::parse($d['date'].' '.$clock($start)));
+            $slot['state'] = $matchedBooking ? 'booked' : ($blocked ? 'closed' : ($past ? 'past' : 'available'));
+            $slot['available'] = ! $blocked && ! $past;
             if ($owner) {
-                $past = now()->gt(Carbon::parse($d['date'].' '.$clock($start)));
-                $slot['state'] = $matchedBooking ? 'booked' : ($blocked ? 'closed' : ($past ? 'past' : 'available'));
-                $slot['available'] = ! $blocked && ! $past;
                 $slot['booking'] = $matchedBooking?->only(['id', 'booking_code', 'start_time', 'end_time', 'customer_name', 'customer_phone', 'status', 'payment_status', 'checked_in']);
             }
             $slots[] = $slot;

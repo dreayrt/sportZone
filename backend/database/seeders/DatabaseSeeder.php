@@ -72,6 +72,24 @@ class DatabaseSeeder extends Seeder
                 'role' => 'customer',
                 'status' => 'active',
             ],
+            [
+                'id' => 5,
+                'full_name' => 'Hoàng Nam',
+                'email' => 'hoangnam@example.com',
+                'phone' => '0909111222',
+                'password_hash' => $defaultPassword,
+                'role' => 'customer',
+                'status' => 'active',
+            ],
+            [
+                'id' => 6,
+                'full_name' => 'Trần Tuấn',
+                'email' => 'trantuan@example.com',
+                'phone' => '0988777666',
+                'password_hash' => $defaultPassword,
+                'role' => 'customer',
+                'status' => 'active',
+            ],
         ];
 
         foreach ($users as $u) {

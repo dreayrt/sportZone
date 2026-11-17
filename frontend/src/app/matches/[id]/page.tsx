@@ -127,7 +127,7 @@ export default function MatchDetailPage() {
             </Card>
           )}
 
-          {isCreator && pendingMembers.length > 0 && (
+          {isCreator && ['open', 'full'].includes(match.status) && pendingMembers.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Yêu cầu đang chờ duyệt</CardTitle></CardHeader>
               <CardContent className="space-y-3">

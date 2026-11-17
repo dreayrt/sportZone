@@ -413,11 +413,11 @@ export const api = {
       apiRequest('/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
     resetPassword: (body: { email: string; token: string; password: string; password_confirmation: string }) =>
       apiRequest('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
-    getSocialRedirectUrl: (provider: 'google' | 'facebook') =>
+    getSocialRedirectUrl: (provider: 'google') =>
       apiRequest<{ url: string }>(`/auth/${provider}/redirect`),
-    linkSocial: (provider: 'google' | 'facebook', redirect?: string) =>
+    linkSocial: (provider: 'google', redirect?: string) =>
       apiRequest<{ url: string }>(`/social/${provider}/link${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`),
-    unlinkSocial: (provider: 'google' | 'facebook') =>
+    unlinkSocial: (provider: 'google') =>
       apiRequest(`/social/${provider}/unlink`, { method: 'DELETE' }),
   },
 
@@ -669,7 +669,7 @@ export const api = {
         { method: 'POST', body: JSON.stringify({ booking_code: bookingCode }) }
       ),
     getStatus: (bookingCode: string) =>
-      apiRequest<{ booking_code: string; total_price: number; total_paid: number; payment_status: string; status: string; is_paid: boolean }>(
+      apiRequest<{ booking_code: string; total_price: number; total_paid: number; payment_status: string; status: string; is_paid: boolean; is_expired: boolean; expires_at: string }>(
         `/payments/status/${encodeURIComponent(bookingCode)}`
       ),
   },

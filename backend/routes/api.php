@@ -42,9 +42,9 @@ Route::prefix('v1')->group(function () {
 
         // OAuth2 Social Login
         Route::get('/{provider}/redirect', [AuthController::class, 'redirectToProvider'])
-            ->where('provider', 'google|facebook');
+            ->where('provider', 'google');
         Route::get('/{provider}/callback', [AuthController::class, 'handleProviderCallback'])
-            ->where('provider', 'google|facebook');
+            ->where('provider', 'google');
     });
 
     // Public Sport Categories
@@ -107,9 +107,9 @@ Route::prefix('v1')->group(function () {
         // Social Account linking (cho user đã đăng nhập)
         Route::prefix('social')->group(function () {
             Route::get('/{provider}/link', [AuthController::class, 'linkSocialAccount'])
-                ->where('provider', 'google|facebook');
+                ->where('provider', 'google');
             Route::delete('/{provider}/unlink', [AuthController::class, 'unlinkSocialAccount'])
-                ->where('provider', 'google|facebook');
+                ->where('provider', 'google');
         });
 
         // Profile cá nhân

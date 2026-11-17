@@ -89,6 +89,10 @@ class MatchMemberController extends BaseController
                 return $this->forbidden('Chỉ người tạo kèo mới có quyền duyệt thành viên.');
             }
 
+            if (! in_array($match->status, ['open', 'full'], true)) {
+                return $this->errorResponse('Không thể duyệt thành viên cho kèo đã hủy hoặc đã kết thúc.', 400);
+            }
+
             $member = MatchMember::where('id', $memberId)
                 ->where('match_post_id', $matchPostId)
                 ->lockForUpdate()

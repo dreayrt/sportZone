@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Booking;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -12,8 +13,9 @@ Schedule::command('sportzone:send-reminders')
     ->everyFiveMinutes()
     ->timezone(config('app.timezone'))
     ->withoutOverlapping(10);
-// Tự động quét và hủy đơn đặt sân unpaid quá 30 phút mỗi 15 phút
-Schedule::command('bookings:cancel-unpaid --minutes=30')->everyFifteenMinutes();
+Schedule::command('bookings:cancel-unpaid --minutes='.Booking::PAYMENT_TIMEOUT_MINUTES)
+    ->everyMinute()
+    ->withoutOverlapping();
 
 // Tự động quét và chuyển đơn quá giờ chưa check-in thành Khách không đến (no_show) mỗi 10 phút
 Schedule::command('bookings:mark-no-shows')->everyTenMinutes();

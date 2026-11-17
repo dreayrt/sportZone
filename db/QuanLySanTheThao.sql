@@ -126,6 +126,7 @@ CREATE TABLE addons (
 
 CREATE TABLE vouchers (
  id INT AUTO_INCREMENT PRIMARY KEY,
+ venue_id INT NULL,
  code VARCHAR(50) NOT NULL UNIQUE,
  name VARCHAR(150) NOT NULL,
  discount_type ENUM('fixed','percent') NOT NULL,
@@ -138,7 +139,9 @@ CREATE TABLE vouchers (
  ends_at DATETIME NOT NULL,
  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
- INDEX idx_vouchers_active(code,status,starts_at,ends_at)
+ INDEX idx_vouchers_active(code,status,starts_at,ends_at),
+ INDEX vouchers_venue_id_index(venue_id),
+ CONSTRAINT vouchers_venue_id_foreign FOREIGN KEY(venue_id) REFERENCES venues(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE bookings (

@@ -53,7 +53,7 @@ class AuthController extends BaseController
                     ]);
 
                     // Sinh mã giới thiệu duy nhất: VD SZ + ID + 4 ký tự ngẫu nhiên
-                    $refCode = 'SZ' . $user->id . strtoupper(Str::random(4));
+                    $refCode = 'SZ'.$user->id.strtoupper(Str::random(4));
                     ReferralCode::create([
                         'user_id' => $user->id,
                         'code' => $refCode,
@@ -74,7 +74,7 @@ class AuthController extends BaseController
                 'token_type' => 'Bearer',
             ], 'Đăng ký tài khoản thành công!', 201);
         } catch (\Exception $e) {
-            return $this->errorResponse('Không thể tạo tài khoản: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể tạo tài khoản: '.$e->getMessage(), 500);
         }
     }
 
@@ -95,11 +95,11 @@ class AuthController extends BaseController
         $user = User::where($loginField, $login)->first();
 
         // Tài khoản OAuth chưa đặt mật khẩu
-        if ($user && !$user->password_hash) {
-            return $this->errorResponse('Tài khoản này đăng nhập bằng Google/Facebook. Vui lòng dùng nút social login hoặc đặt mật khẩu trong profile.', 401);
+        if ($user && ! $user->password_hash) {
+            return $this->errorResponse('Tài khoản này đăng nhập bằng Google. Vui lòng dùng nút social login hoặc đặt mật khẩu trong profile.', 401);
         }
 
-        if (!$user || !$user->password_hash || !Hash::check($request->password, $user->password_hash)) {
+        if (! $user || ! $user->password_hash || ! Hash::check($request->password, $user->password_hash)) {
             $this->turnstile->recordLoginFailure($login, $request->ip());
             $needsCaptcha = $this->turnstile->loginCaptchaRequired($login, $request->ip());
 
@@ -148,13 +148,13 @@ class AuthController extends BaseController
         $user = User::where('email', $request->email)->first();
 
         // Không tiết lộ email có tồn tại hay không (chống dò quét tài khoản)
-        if (!$user) {
+        if (! $user) {
             return $this->successResponse(null, 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi.');
         }
 
         // Tài khoản OAuth chưa có mật khẩu -> hướng dẫn đặt mật khẩu khác
-        if (!$user->password_hash && $user->socialAccounts()->exists()) {
-            return $this->errorResponse('Tài khoản này đăng nhập bằng Google/Facebook và chưa có mật khẩu. Vui lòng đăng nhập bằng social login.', 422);
+        if (! $user->password_hash && $user->socialAccounts()->exists()) {
+            return $this->errorResponse('Tài khoản này đăng nhập bằng Google và chưa có mật khẩu. Vui lòng đăng nhập bằng social login.', 422);
         }
 
         try {
@@ -170,13 +170,13 @@ class AuthController extends BaseController
             ]);
 
             $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
-            $resetUrl = $frontendUrl . '/auth/reset-password?token=' . $plainToken . '&email=' . urlencode($user->email);
+            $resetUrl = $frontendUrl.'/auth/reset-password?token='.$plainToken.'&email='.urlencode($user->email);
 
             Mail::to($user->email)->send(new ResetPasswordMail($resetUrl, $user->full_name));
 
             return $this->successResponse(null, 'Nếu email tồn tại trong hệ thống, liên kết đặt lại mật khẩu đã được gửi.');
         } catch (\Exception $e) {
-            return $this->errorResponse('Không thể gửi email đặt lại mật khẩu: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể gửi email đặt lại mật khẩu: '.$e->getMessage(), 500);
         }
     }
 
@@ -187,7 +187,7 @@ class AuthController extends BaseController
     {
         $record = DB::table('password_reset_tokens')->where('email', $request->email)->first();
 
-        if (!$record) {
+        if (! $record) {
             return $this->errorResponse('Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.', 422);
         }
 
@@ -198,13 +198,13 @@ class AuthController extends BaseController
             return $this->errorResponse('Liên kết đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu liên kết mới.', 422);
         }
 
-        if (!Hash::check($request->token, $record->token)) {
+        if (! Hash::check($request->token, $record->token)) {
             return $this->errorResponse('Liên kết đặt lại mật khẩu không hợp lệ.', 422);
         }
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user) {
+        if (! $user) {
             return $this->errorResponse('Không tìm thấy tài khoản với email này.', 404);
         }
 
@@ -231,19 +231,20 @@ class AuthController extends BaseController
     }
 
     /**
-     * Redirect to OAuth provider (Google / Facebook)
+     * Redirect to OAuth provider (Google)
      */
     public function redirectToProvider(string $provider): JsonResponse
     {
-        if (!in_array($provider, ['google', 'facebook'])) {
+        if (! in_array($provider, ['google'])) {
             return $this->errorResponse('Nhà cung cấp không được hỗ trợ.', 400);
         }
 
         try {
             $url = Socialite::driver($provider)->stateless()->redirect()->getTargetUrl();
-            return $this->successResponse(['url' => $url], 'Chuyển hướng đến ' . ucfirst($provider) . ' OAuth.');
+
+            return $this->successResponse(['url' => $url], 'Chuyển hướng đến '.ucfirst($provider).' OAuth.');
         } catch (\Exception $e) {
-            return $this->errorResponse('Không thể khởi tạo OAuth: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể khởi tạo OAuth: '.$e->getMessage(), 500);
         }
     }
 
@@ -253,7 +254,7 @@ class AuthController extends BaseController
      */
     public function handleProviderCallback(Request $request, string $provider): RedirectResponse|JsonResponse
     {
-        if (!in_array($provider, ['google', 'facebook'])) {
+        if (! in_array($provider, ['google'])) {
             return $this->errorResponse('Nhà cung cấp không được hỗ trợ.', 400);
         }
 
@@ -282,6 +283,7 @@ class AuthController extends BaseController
                         'provider_name' => $socialUser->getName(),
                         'provider_email' => $socialUser->getEmail(),
                     ]);
+
                     return $socialAccount->user;
                 }
 
@@ -306,7 +308,7 @@ class AuthController extends BaseController
                     ]);
 
                     // Cập nhật avatar nếu chưa có
-                    if (!$existingUser->avatar && $socialUser->getAvatar()) {
+                    if (! $existingUser->avatar && $socialUser->getAvatar()) {
                         $existingUser->update(['avatar' => $socialUser->getAvatar()]);
                     }
 
@@ -345,7 +347,7 @@ class AuthController extends BaseController
                     'tier' => 'bronze',
                 ]);
 
-                $refCode = 'SZ' . $user->id . strtoupper(Str::random(4));
+                $refCode = 'SZ'.$user->id.strtoupper(Str::random(4));
                 ReferralCode::create([
                     'user_id' => $user->id,
                     'code' => $refCode,
@@ -361,13 +363,14 @@ class AuthController extends BaseController
 
             // Redirect về frontend với token
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = $frontendUrl . '/auth/callback/' . $provider . '?token=' . $token;
+            $redirectUrl = $frontendUrl.'/auth/callback/'.$provider.'?token='.$token;
 
             return redirect()->away($redirectUrl);
 
         } catch (\Exception $e) {
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $errorUrl = $frontendUrl . '/auth/login?error=' . urlencode('OAuth thất bại: ' . $e->getMessage());
+            $errorUrl = $frontendUrl.'/auth/login?error='.urlencode('OAuth thất bại: '.$e->getMessage());
+
             return redirect()->away($errorUrl);
         }
     }
@@ -378,7 +381,7 @@ class AuthController extends BaseController
      */
     public function linkSocialAccount(Request $request, string $provider): JsonResponse
     {
-        if (!in_array($provider, ['google', 'facebook'])) {
+        if (! in_array($provider, ['google'])) {
             return $this->errorResponse('Nhà cung cấp không được hỗ trợ.', 400);
         }
 
@@ -390,17 +393,17 @@ class AuthController extends BaseController
             ->first();
 
         if ($existing) {
-            return $this->errorResponse('Tài khoản ' . ucfirst($provider) . ' đã được liên kết.', 422);
+            return $this->errorResponse('Tài khoản '.ucfirst($provider).' đã được liên kết.', 422);
         }
 
         $redirect = $request->input('redirect');
-        if (!is_string($redirect) || !str_starts_with($redirect, '/') || str_starts_with($redirect, '//')) {
+        if (! is_string($redirect) || ! str_starts_with($redirect, '/') || str_starts_with($redirect, '//')) {
             $redirect = '/dashboard/customer/profile';
         }
 
         try {
             $state = Str::random(40);
-            Cache::put('social_link_' . $state, [
+            Cache::put('social_link_'.$state, [
                 'user_id' => $user->id,
                 'redirect' => $redirect,
             ], now()->addMinutes(10));
@@ -409,9 +412,9 @@ class AuthController extends BaseController
                 ->with(['state' => $state])
                 ->redirect()->getTargetUrl();
 
-            return $this->successResponse(['url' => $url], 'Chuyển hướng để liên kết ' . ucfirst($provider) . '.');
+            return $this->successResponse(['url' => $url], 'Chuyển hướng để liên kết '.ucfirst($provider).'.');
         } catch (\Exception $e) {
-            return $this->errorResponse('Không thể khởi tạo OAuth: ' . $e->getMessage(), 500);
+            return $this->errorResponse('Không thể khởi tạo OAuth: '.$e->getMessage(), 500);
         }
     }
 
@@ -425,26 +428,26 @@ class AuthController extends BaseController
         $fail = function (string $fallbackRedirect, string $message) use ($frontendUrl) {
             $sep = str_contains($fallbackRedirect, '?') ? '&' : '?';
 
-            return redirect()->away($frontendUrl . $fallbackRedirect . $sep . 'link_error=' . urlencode($message));
+            return redirect()->away($frontendUrl.$fallbackRedirect.$sep.'link_error='.urlencode($message));
         };
 
-        $pending = Cache::pull('social_link_' . $request->input('state'));
+        $pending = Cache::pull('social_link_'.$request->input('state'));
 
-        if (!$pending || !isset($pending['user_id'])) {
+        if (! $pending || ! isset($pending['user_id'])) {
             return $fail('/dashboard/customer/profile', 'Phiên liên kết đã hết hạn. Vui lòng thử lại.');
         }
 
         $user = User::find($pending['user_id']);
         $fallback = $pending['redirect'] ?? '/dashboard/customer/profile';
 
-        if (!$user || $user->status === 'blocked') {
+        if (! $user || $user->status === 'blocked') {
             return $fail($fallback, 'Tài khoản không tồn tại hoặc đã bị khóa.');
         }
 
         try {
             $socialUser = Socialite::driver($provider)->stateless()->user();
         } catch (\Exception $e) {
-            return $fail($fallback, 'OAuth thất bại: ' . $e->getMessage());
+            return $fail($fallback, 'OAuth thất bại: '.$e->getMessage());
         }
 
         // Tài khoản social này đã gắn với user khác?
@@ -453,7 +456,7 @@ class AuthController extends BaseController
             ->first();
 
         if ($taken && $taken->user_id !== $user->id) {
-            return $fail($fallback, 'Tài khoản ' . ucfirst($provider) . ' này đã được liên kết với tài khoản khác.');
+            return $fail($fallback, 'Tài khoản '.ucfirst($provider).' này đã được liên kết với tài khoản khác.');
         }
 
         if ($taken) {
@@ -471,7 +474,7 @@ class AuthController extends BaseController
                 ->first();
 
             if ($ownLink) {
-                return $fail($fallback, 'Bạn đã liên kết ' . ucfirst($provider) . ' rồi.');
+                return $fail($fallback, 'Bạn đã liên kết '.ucfirst($provider).' rồi.');
             }
 
             SocialAccount::create([
@@ -486,14 +489,14 @@ class AuthController extends BaseController
                 'token_expires_at' => $socialUser->expiresIn ? now()->addSeconds($socialUser->expiresIn) : null,
             ]);
 
-            if (!$user->avatar && $socialUser->getAvatar()) {
+            if (! $user->avatar && $socialUser->getAvatar()) {
                 $user->update(['avatar' => $socialUser->getAvatar()]);
             }
         }
 
         $sep = str_contains($fallback, '?') ? '&' : '?';
 
-        return redirect()->away($frontendUrl . $fallback . $sep . 'linked=' . $provider);
+        return redirect()->away($frontendUrl.$fallback.$sep.'linked='.$provider);
     }
 
     /**
@@ -501,7 +504,7 @@ class AuthController extends BaseController
      */
     public function unlinkSocialAccount(Request $request, string $provider): JsonResponse
     {
-        if (!in_array($provider, ['google', 'facebook'])) {
+        if (! in_array($provider, ['google'])) {
             return $this->errorResponse('Nhà cung cấp không được hỗ trợ.', 400);
         }
 
@@ -511,17 +514,17 @@ class AuthController extends BaseController
             ->where('provider', $provider)
             ->first();
 
-        if (!$socialAccount) {
-            return $this->notFound('Không tìm thấy tài khoản ' . ucfirst($provider) . ' đã liên kết.');
+        if (! $socialAccount) {
+            return $this->notFound('Không tìm thấy tài khoản '.ucfirst($provider).' đã liên kết.');
         }
 
         // Không cho xóa nếu user không có password và chỉ có 1 social account
-        if (!$user->password_hash && $user->socialAccounts()->count() === 1) {
+        if (! $user->password_hash && $user->socialAccounts()->count() === 1) {
             return $this->errorResponse('Không thể hủy liên kết tài khoản duy nhất khi chưa đặt mật khẩu.', 422);
         }
 
         $socialAccount->delete();
 
-        return $this->successResponse(null, 'Đã hủy liên kết ' . ucfirst($provider) . ' thành công.');
+        return $this->successResponse(null, 'Đã hủy liên kết '.ucfirst($provider).' thành công.');
     }
 }

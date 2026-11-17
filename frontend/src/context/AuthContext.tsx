@@ -5,7 +5,7 @@ import { api, getStoredToken, setStoredToken, removeStoredToken } from '@/lib/ap
 
 export interface LinkedSocialAccount {
   id: number;
-  provider: 'google' | 'facebook';
+  provider: string;
   provider_id: string;
   provider_email: string | null;
   provider_name: string | null;

@@ -8,6 +8,7 @@ use App\Models\BookingStatusHistory;
 use App\Models\Payment;
 use App\Models\SystemSetting;
 use App\Models\User;
+use App\Services\BookingService;
 use App\Services\SePayQrService;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,8 @@ use Illuminate\Support\Facades\Log;
 class PaymentController extends BaseController
 {
     public function __construct(
-        protected SePayQrService $sePayQrService
+        protected SePayQrService $sePayQrService,
+        protected BookingService $bookingService
     ) {}
 
     /**
@@ -41,6 +43,11 @@ class PaymentController extends BaseController
 
         if (! $this->canAccessBooking($request->user(), $booking)) {
             return $this->forbidden('Bạn không có quyền thanh toán đơn đặt sân này.');
+        }
+
+        $booking = $this->expireUnpaidBooking($booking);
+        if ($booking->isPaymentExpired()) {
+            return $this->errorResponse('Đã hết hạn thanh toán. Vui lòng kiểm tra đơn hoặc liên hệ chủ sân để đối soát khoản đã chuyển.', 400);
         }
 
         if (in_array($booking->status, ['cancelled', 'completed', 'no_show'], true)) {
@@ -99,8 +106,8 @@ class PaymentController extends BaseController
                 'account_name' => $qrData['account_name'],
                 'amount' => $qrData['amount'],
                 'transfer_content' => $transferDescription,
-                'expires_in_minutes' => 15,
-                'expires_at' => now()->addMinutes(15)->toIso8601String(),
+                'expires_in_minutes' => (int) ceil(now()->diffInSeconds($booking->paymentExpiresAt()) / 60),
+                'expires_at' => $booking->paymentExpiresAt()->toIso8601String(),
             ],
         ], 'Tạo mã QR thanh toán qua SePay thành công.');
     }
@@ -235,11 +242,21 @@ class PaymentController extends BaseController
         try {
             $result = DB::transaction(function () use ($booking, $transferAmount, $transactionCode, $bankReferenceCode, $sepayTransactionId, $content, $transactionDate) {
                 $lockedBooking = Booking::whereKey($booking->id)->lockForUpdate()->first();
+                if ($lockedBooking) {
+                    $lockedBooking = $this->expireUnpaidBooking($lockedBooking);
+                }
                 if (
                     ! $lockedBooking
                     || $lockedBooking->payment_method !== 'vietqr'
                     || in_array($lockedBooking->status, ['cancelled', 'completed', 'no_show'], true)
+                    || $lockedBooking->isPaymentExpired()
                 ) {
+                    Log::warning('[SePay Webhook] Giao dịch cho đơn hết hạn hoặc đã kết thúc; cần đối soát thủ công.', [
+                        'booking_code' => $lockedBooking?->booking_code,
+                        'transaction_code' => $transactionCode,
+                        'amount' => $transferAmount,
+                    ]);
+
                     return ['ignored' => true, 'booking' => $lockedBooking];
                 }
 
@@ -297,7 +314,7 @@ class PaymentController extends BaseController
                 return ['duplicate' => false, 'ignored' => false, 'booking' => $lockedBooking->refresh()];
             });
 
-            if ($result['duplicate']) {
+            if ($result['duplicate'] ?? false) {
                 return response()->json([
                     'success' => true,
                     'message' => 'Giao dịch đã được xử lý trước đó.',
@@ -307,7 +324,7 @@ class PaymentController extends BaseController
             if ($result['ignored'] ?? false) {
                 return response()->json([
                     'success' => true,
-                    'message' => 'Đơn đã kết thúc hoặc đã hủy; giao dịch cần được đối soát thủ công.',
+                    'message' => 'Đơn đã hết hạn, kết thúc hoặc đã hủy; giao dịch cần được đối soát thủ công.',
                 ]);
             }
 
@@ -372,6 +389,8 @@ class PaymentController extends BaseController
             return $this->forbidden('Bạn không có quyền xem trạng thái thanh toán của đơn này.');
         }
 
+        $booking = $this->expireUnpaidBooking($booking)->load('payments');
+
         return $this->successResponse([
             'booking_code' => $booking->booking_code,
             'total_price' => $booking->total_price,
@@ -379,6 +398,8 @@ class PaymentController extends BaseController
             'payment_status' => $booking->payment_status,
             'status' => $booking->status,
             'is_paid' => $booking->payment_status === 'paid',
+            'is_expired' => $booking->isPaymentExpired(),
+            'expires_at' => $booking->paymentExpiresAt()->toIso8601String(),
             'payments' => $booking->payments->map(fn ($p) => [
                 'amount' => $p->amount,
                 'status' => $p->status,
@@ -408,6 +429,22 @@ class PaymentController extends BaseController
         $payments = $query->orderByDesc('id')->paginate($request->integer('per_page', 20));
 
         return $this->successResponse($payments, 'Lấy danh sách giao dịch thành công.');
+    }
+
+    private function expireUnpaidBooking(Booking $booking): Booking
+    {
+        return DB::transaction(function () use ($booking): Booking {
+            $locked = Booking::whereKey($booking->id)->lockForUpdate()->firstOrFail();
+            if ($locked->isPaymentExpired()
+                && $locked->payment_status === 'unpaid'
+                && in_array($locked->status, ['pending', 'confirmed'], true)
+                && ! $locked->checked_in
+                && ! $locked->payments()->where('status', 'paid')->exists()) {
+                return $this->bookingService->cancelBooking($locked, 'Hệ thống tự động hủy: Quá hạn thanh toán ('.Booking::PAYMENT_TIMEOUT_MINUTES.' phút)');
+            }
+
+            return $locked;
+        });
     }
 
     private function canAccessBooking(User $user, Booking $booking): bool

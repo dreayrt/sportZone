@@ -49,12 +49,11 @@ export default function CourtCalendar({
     return () => ac.abort();
   }, [courtId, date, owner, refresh]);
   useEffect(() => {
-    if (!owner) return;
     const timer = setInterval(() => {
       if (!document.hidden) setRefresh((value) => value + 1);
     }, 60000);
     return () => clearInterval(timer);
-  }, [owner]);
+  }, []);
   const shift = (days: number) => {
     const value = new Date(`${date}T12:00:00`);
     value.setDate(value.getDate() + days);
@@ -158,7 +157,7 @@ export default function CourtCalendar({
           <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5 xl:grid-cols-5">
             {data.slots.map((slot) => {
               const booking = owner ? slot.booking : null;
-              const tone = booking
+              const tone = slot.state === "booked"
                 ? "border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30"
                 : slot.available
                   ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30"

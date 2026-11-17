@@ -40,12 +40,6 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/google/callback'),
     ],
 
-    'facebook' => [
-        'client_id' => env('FACEBOOK_CLIENT_ID'),
-        'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
-        'redirect' => env('FACEBOOK_REDIRECT_URI', 'http://127.0.0.1:8000/api/v1/auth/facebook/callback'),
-    ],
-
     'sepay' => [
         'webhook_secret' => env('SEPAY_WEBHOOK_SECRET'),
         'bank_name' => env('SEPAY_BANK_NAME', 'MBBank'),

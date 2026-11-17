@@ -6,16 +6,60 @@ use App\Models\MatchMember;
 use App\Models\MatchPost;
 use App\Models\SportCategory;
 use App\Models\User;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class MatchmakingTest extends TestCase
 {
+    use RefreshDatabase;
+
+    public function createApplication(): Application
+    {
+        $app = parent::createApplication();
+        $app['config']->set('database.default', 'sqlite');
+        $app['config']->set('database.connections.sqlite.database', ':memory:');
+        $app['config']->set('database.connections.sqlite.url', null);
+
+        return $app;
+    }
+
     protected function getTestUsers(): array
     {
+        $this->seed();
         $creator = User::where('role', 'customer')->first() ?? User::find(4);
         $applicant = User::where('id', '!=', $creator->id)->first() ?? User::find(1);
 
         return [$creator, $applicant];
+    }
+
+    public function test_demo_seed_has_all_match_creators_and_members(): void
+    {
+        $this->seed();
+
+        $this->assertDatabaseCount('match_posts', 3);
+        $this->assertDatabaseHas('match_members', ['match_post_id' => 1, 'user_id' => 5, 'status' => 'accepted']);
+        $this->assertDatabaseHas('users', ['id' => 6, 'role' => 'customer']);
+    }
+
+    public static function closedMatchStatuses(): array
+    {
+        return ['cancelled' => ['cancelled'], 'completed' => ['completed']];
+    }
+
+    #[DataProvider('closedMatchStatuses')]
+    public function test_cannot_accept_member_after_match_is_closed(string $status): void
+    {
+        [$creator, $applicant] = $this->getTestUsers();
+        $post = MatchPost::findOrFail(1);
+        $post->update(['status' => $status]);
+        $member = MatchMember::create(['match_post_id' => $post->id, 'user_id' => $applicant->id, 'status' => 'pending']);
+
+        $this->actingAs($creator)->putJson("/api/v1/matches/{$post->id}/members/{$member->id}/accept")->assertStatus(400);
+
+        $this->assertDatabaseHas('match_members', ['id' => $member->id, 'status' => 'pending']);
+        $this->assertDatabaseHas('match_posts', ['id' => $post->id, 'status' => $status, 'current_members' => 2]);
     }
 
     public function test_guest_can_list_matches(): void

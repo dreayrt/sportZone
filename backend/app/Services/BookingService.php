@@ -127,7 +127,8 @@ class BookingService
         $discountAmount = 0;
         $appliedVoucher = null;
 
-        if (! empty($voucherCode)) {
+        $voucherCode = strtoupper(trim((string) $voucherCode));
+        if ($voucherCode !== '') {
             $voucher = Voucher::with('venue')->where('code', strtoupper(trim($voucherCode)))->first();
             if (! $voucher) {
                 throw ValidationException::withMessages([
@@ -649,7 +650,7 @@ class BookingService
     /**
      * Quét và tự động hủy các đơn đặt sân chưa thanh toán sau X phút
      */
-    public function cancelUnpaidBookings(int $expireMinutes = 30, ?int $ownerId = null, ?int $venueId = null): int
+    public function cancelUnpaidBookings(int $expireMinutes = Booking::PAYMENT_TIMEOUT_MINUTES, ?int $ownerId = null, ?int $venueId = null): int
     {
         $threshold = Carbon::now()->subMinutes($expireMinutes);
 
@@ -855,6 +856,7 @@ class BookingService
                 'peak' => $isPeak,
                 'rate' => $rate,
                 'is_booked' => $matchedBooking !== null || $court->status !== 'active' || $court->venue->status !== 'active' || $court->venue->admin_suspended_at !== null || $slotStart->lt(now()),
+                'state' => $matchedBooking !== null ? 'booked' : ($slotStart->lt(now()) ? 'past' : ($court->status !== 'active' ? 'closed' : 'available')),
                 'booking_code' => $includeCustomer ? $matchedBooking?->booking_code : null,
                 'customer_name' => $includeCustomer && $matchedBooking ? ($matchedBooking->customer_name.' ('.substr($matchedBooking->customer_phone, 0, 4).'***)') : null,
                 'booking_status' => $includeCustomer ? $matchedBooking?->status : null,

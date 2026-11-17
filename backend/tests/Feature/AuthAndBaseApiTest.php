@@ -2,7 +2,19 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ResetPasswordMail;
+use App\Models\ReferralCode;
+use App\Models\SocialAccount;
 use App\Models\User;
+use App\Models\UserPoint;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 use Tests\TestCase;
 
 class AuthAndBaseApiTest extends TestCase
@@ -12,7 +24,7 @@ class AuthAndBaseApiTest extends TestCase
      */
     protected function tearDown(): void
     {
-        \Illuminate\Support\Facades\DB::table('personal_access_tokens')
+        DB::table('personal_access_tokens')
             ->whereIn('name', ['test_token', 'customer_token'])
             ->delete();
 
@@ -24,20 +36,21 @@ class AuthAndBaseApiTest extends TestCase
      */
     private function deleteTestUser(?int $userId): void
     {
-        if (!$userId) {
+        if (! $userId) {
             return;
         }
 
         $user = User::find($userId);
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
         $user->tokens()->delete();
-        \App\Models\UserPoint::where('user_id', $userId)->delete();
-        \App\Models\ReferralCode::where('user_id', $userId)->delete();
+        UserPoint::where('user_id', $userId)->delete();
+        ReferralCode::where('user_id', $userId)->delete();
         $user->delete();
     }
+
     public function test_health_check_returns_ok(): void
     {
         $response = $this->getJson('/api/v1/health');
@@ -106,7 +119,7 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/profile');
 
         $response->assertStatus(200)
@@ -123,7 +136,7 @@ class AuthAndBaseApiTest extends TestCase
         $customer = User::where('role', 'customer')->first();
         $token = $customer->createToken('customer_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/v1/admin/sport-categories', [
                 'code' => 'table_tennis',
                 'name' => 'Bóng bàn',
@@ -137,8 +150,8 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_new_user_can_register(): void
     {
-        $uniquePhone = '09' . mt_rand(10000000, 99999999);
-        $uniqueEmail = 'test_' . uniqid() . '@sportzone.local';
+        $uniquePhone = '09'.mt_rand(10000000, 99999999);
+        $uniqueEmail = 'test_'.uniqid().'@sportzone.local';
         $createdUserId = null;
 
         try {
@@ -177,7 +190,7 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_forgot_password_sends_reset_link(): void
     {
-        \Illuminate\Support\Facades\Mail::fake();
+        Mail::fake();
 
         $response = $this->postJson('/api/v1/auth/forgot-password', [
             'email' => 'minhanh@example.com',
@@ -190,7 +203,7 @@ class AuthAndBaseApiTest extends TestCase
             'email' => 'minhanh@example.com',
         ]);
 
-        \Illuminate\Support\Facades\Mail::assertSent(\App\Mail\ResetPasswordMail::class);
+        Mail::assertSent(ResetPasswordMail::class);
     }
 
     public function test_forgot_password_does_not_reveal_unknown_email(): void
@@ -206,15 +219,15 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_reset_password_with_valid_token(): void
     {
-        $plainToken = \Illuminate\Support\Str::random(64);
+        $plainToken = Str::random(64);
 
-        \Illuminate\Support\Facades\DB::table('password_reset_tokens')
+        DB::table('password_reset_tokens')
             ->where('email', 'minhanh@example.com')
             ->delete();
 
-        \Illuminate\Support\Facades\DB::table('password_reset_tokens')->insert([
+        DB::table('password_reset_tokens')->insert([
             'email' => 'minhanh@example.com',
-            'token' => \Illuminate\Support\Facades\Hash::make($plainToken),
+            'token' => Hash::make($plainToken),
             'created_at' => now(),
         ]);
 
@@ -241,8 +254,8 @@ class AuthAndBaseApiTest extends TestCase
         $login->assertStatus(200)->assertJson(['success' => true]);
 
         // Khôi phục mật khẩu gốc để không ảnh hưởng test khác
-        $user = \App\Models\User::where('email', 'minhanh@example.com')->first();
-        $user->update(['password_hash' => \Illuminate\Support\Facades\Hash::make('password')]);
+        $user = User::where('email', 'minhanh@example.com')->first();
+        $user->update(['password_hash' => Hash::make('password')]);
     }
 
     public function test_reset_password_with_invalid_token(): void
@@ -267,6 +280,14 @@ class AuthAndBaseApiTest extends TestCase
         $response->assertJsonStructure(['success', 'message']);
     }
 
+    public function test_facebook_authentication_and_link_routes_are_removed(): void
+    {
+        $this->getJson('/api/v1/auth/facebook/redirect')->assertNotFound();
+        $this->getJson('/api/v1/auth/facebook/callback?code=unused')->assertNotFound();
+        $this->getJson('/api/v1/social/facebook/link')->assertNotFound();
+        $this->deleteJson('/api/v1/social/facebook/unlink')->assertNotFound();
+    }
+
     public function test_link_social_requires_auth(): void
     {
         $response = $this->getJson('/api/v1/social/google/link');
@@ -279,7 +300,7 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/social/twitter/link');
 
         $response->assertStatus(404);
@@ -303,11 +324,11 @@ class AuthAndBaseApiTest extends TestCase
         $providerMock->shouldReceive('redirect')
             ->andReturn(redirect('https://accounts.google.com/o/oauth2/auth?state=stub'));
 
-        \Laravel\Socialite\Facades\Socialite::shouldReceive('driver')
+        Socialite::shouldReceive('driver')
             ->with('google')
             ->andReturn($providerMock);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/social/google/link');
 
         $response->assertStatus(200)
@@ -316,20 +337,20 @@ class AuthAndBaseApiTest extends TestCase
 
         // State dùng 1 lần đã được lưu, gắn đúng user
         $this->assertNotNull($capturedState);
-        $pending = \Illuminate\Support\Facades\Cache::get('social_link_' . $capturedState);
+        $pending = Cache::get('social_link_'.$capturedState);
         $this->assertEquals($user->id, $pending['user_id']);
     }
 
     public function test_link_social_rejects_already_linked(): void
     {
         $user = User::where('email', 'minhanh@example.com')->first();
-        \App\Models\SocialAccount::firstOrCreate(
+        SocialAccount::firstOrCreate(
             ['provider' => 'google', 'provider_id' => 'already-linked-1'],
             ['user_id' => $user->id]
         );
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/social/google/link');
 
         $response->assertStatus(422)->assertJson(['success' => false]);
@@ -358,7 +379,7 @@ class AuthAndBaseApiTest extends TestCase
         $providerMock->shouldReceive('stateless')->andReturnSelf();
         $providerMock->shouldReceive('user')->andReturn($socialUser);
 
-        \Laravel\Socialite\Facades\Socialite::shouldReceive('driver')
+        Socialite::shouldReceive('driver')
             ->with($provider)
             ->andReturn($providerMock);
     }
@@ -366,29 +387,29 @@ class AuthAndBaseApiTest extends TestCase
     public function test_link_callback_links_new_social_account(): void
     {
         $user = User::where('email', 'minhanh@example.com')->first();
-        \App\Models\SocialAccount::where('user_id', $user->id)->where('provider', 'facebook')->delete();
+        SocialAccount::where('user_id', $user->id)->where('provider', 'google')->delete();
 
-        $state = \Illuminate\Support\Str::random(40);
-        \Illuminate\Support\Facades\Cache::put('social_link_' . $state, [
+        $state = Str::random(40);
+        Cache::put('social_link_'.$state, [
             'user_id' => $user->id,
             'redirect' => '/dashboard/customer/profile',
         ], now()->addMinutes(10));
 
-        $this->mockSocialiteUser('facebook', $this->makeSocialiteUser('fb-link-1', 'fbuser@example.com'));
+        $this->mockSocialiteUser('google', $this->makeSocialiteUser('fb-link-1', 'fbuser@example.com'));
 
-        $response = $this->get('/api/v1/auth/facebook/callback?state=' . $state . '&code=fakecode');
+        $response = $this->get('/api/v1/auth/google/callback?state='.$state.'&code=fakecode');
 
         $response->assertRedirect();
-        $this->assertStringContainsString('linked=facebook', $response->headers->get('Location'));
+        $this->assertStringContainsString('linked=google', $response->headers->get('Location'));
 
         $this->assertDatabaseHas('social_accounts', [
             'user_id' => $user->id,
-            'provider' => 'facebook',
+            'provider' => 'google',
             'provider_id' => 'fb-link-1',
         ]);
 
         // State dùng 1 lần đã bị thu hồi
-        $this->assertNull(\Illuminate\Support\Facades\Cache::get('social_link_' . $state));
+        $this->assertNull(Cache::get('social_link_'.$state));
     }
 
     public function test_link_callback_rejects_expired_state(): void
@@ -402,23 +423,23 @@ class AuthAndBaseApiTest extends TestCase
     public function test_link_callback_rejects_account_taken_by_other_user(): void
     {
         $ownerA = User::where('email', 'owner1@sportzone.local')->first();
-        \App\Models\SocialAccount::firstOrCreate(
+        SocialAccount::firstOrCreate(
             ['provider' => 'google', 'provider_id' => 'taken-google-1'],
             ['user_id' => $ownerA->id]
         );
 
         $userB = User::where('email', 'minhanh@example.com')->first();
-        \App\Models\SocialAccount::where('user_id', $userB->id)->where('provider', 'google')->delete();
+        SocialAccount::where('user_id', $userB->id)->where('provider', 'google')->delete();
 
-        $state = \Illuminate\Support\Str::random(40);
-        \Illuminate\Support\Facades\Cache::put('social_link_' . $state, [
+        $state = Str::random(40);
+        Cache::put('social_link_'.$state, [
             'user_id' => $userB->id,
             'redirect' => '/dashboard/customer/profile',
         ], now()->addMinutes(10));
 
         $this->mockSocialiteUser('google', $this->makeSocialiteUser('taken-google-1', 'other@example.com'));
 
-        $response = $this->get('/api/v1/auth/google/callback?state=' . $state . '&code=fakecode');
+        $response = $this->get('/api/v1/auth/google/callback?state='.$state.'&code=fakecode');
 
         $response->assertRedirect();
         $this->assertStringContainsString('link_error=', $response->headers->get('Location'));
@@ -432,21 +453,21 @@ class AuthAndBaseApiTest extends TestCase
     public function test_unlink_social_removes_link(): void
     {
         $user = User::where('email', 'minhanh@example.com')->first();
-        \App\Models\SocialAccount::where('user_id', $user->id)->where('provider', 'facebook')->delete();
-        \App\Models\SocialAccount::create([
+        SocialAccount::where('user_id', $user->id)->where('provider', 'google')->delete();
+        SocialAccount::create([
             'user_id' => $user->id,
-            'provider' => 'facebook',
+            'provider' => 'google',
             'provider_id' => 'fb-unlink-1',
         ]);
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->deleteJson('/api/v1/social/facebook/unlink');
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->deleteJson('/api/v1/social/google/unlink');
 
         $response->assertStatus(200)->assertJson(['success' => true]);
         $this->assertDatabaseMissing('social_accounts', [
             'user_id' => $user->id,
-            'provider' => 'facebook',
+            'provider' => 'google',
             'provider_id' => 'fb-unlink-1',
         ]);
     }
@@ -454,11 +475,11 @@ class AuthAndBaseApiTest extends TestCase
     public function test_unlink_social_not_found(): void
     {
         $user = User::where('email', 'minhanh@example.com')->first();
-        \App\Models\SocialAccount::where('user_id', $user->id)->where('provider', 'facebook')->delete();
+        SocialAccount::where('user_id', $user->id)->where('provider', 'google')->delete();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->deleteJson('/api/v1/social/facebook/unlink');
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->deleteJson('/api/v1/social/google/unlink');
 
         $response->assertStatus(404)->assertJson(['success' => false]);
     }
@@ -467,27 +488,27 @@ class AuthAndBaseApiTest extends TestCase
     {
         $oauthUser = User::create([
             'full_name' => 'OAuth Only',
-            'email' => 'oauthonly_' . uniqid() . '@sportzone.local',
+            'email' => 'oauthonly_'.uniqid().'@sportzone.local',
             'phone' => null,
             'password_hash' => null,
             'role' => 'customer',
             'status' => 'active',
         ]);
-        \App\Models\SocialAccount::create([
+        SocialAccount::create([
             'user_id' => $oauthUser->id,
             'provider' => 'google',
-            'provider_id' => 'oauthonly-' . uniqid(),
+            'provider_id' => 'oauthonly-'.uniqid(),
         ]);
         $token = $oauthUser->createToken('test_token')->plainTextToken;
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            $response = $this->withHeader('Authorization', 'Bearer '.$token)
                 ->deleteJson('/api/v1/social/google/unlink');
 
             $response->assertStatus(422)->assertJson(['success' => false]);
         } finally {
             // Dọn dữ liệu test
-            \App\Models\SocialAccount::where('user_id', $oauthUser->id)->delete();
+            SocialAccount::where('user_id', $oauthUser->id)->delete();
             $oauthUser->delete();
         }
     }
@@ -499,7 +520,7 @@ class AuthAndBaseApiTest extends TestCase
         $token = $user->createToken('test_token')->plainTextToken;
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            $response = $this->withHeader('Authorization', 'Bearer '.$token)
                 ->putJson('/api/v1/profile', [
                     'full_name' => 'Nguyễn Minh Anh Updated',
                 ]);
@@ -520,7 +541,7 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->putJson('/api/v1/profile', [
                 'phone' => '0908000002', // của owner1
             ]);
@@ -533,7 +554,7 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/profile');
 
         $response->assertStatus(200)
@@ -547,7 +568,7 @@ class AuthAndBaseApiTest extends TestCase
     {
         $oauthUser = User::create([
             'full_name' => 'OAuth Pw',
-            'email' => 'oauthpw_' . uniqid() . '@sportzone.local',
+            'email' => 'oauthpw_'.uniqid().'@sportzone.local',
             'phone' => null,
             'password_hash' => null,
             'role' => 'customer',
@@ -556,7 +577,7 @@ class AuthAndBaseApiTest extends TestCase
         $token = $oauthUser->createToken('test_token')->plainTextToken;
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            $response = $this->withHeader('Authorization', 'Bearer '.$token)
                 ->putJson('/api/v1/profile/password', [
                     'new_password' => 'newpass123',
                     'new_password_confirmation' => 'newpass123',
@@ -580,7 +601,7 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->putJson('/api/v1/profile/password', [
                 'current_password' => 'sai-mat-khau',
                 'new_password' => 'newpass123',
@@ -592,15 +613,15 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_user_can_upload_avatar(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('public');
+        Storage::fake('public');
 
         $user = User::where('email', 'minhanh@example.com')->first();
         $user->update(['avatar' => null]);
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $file = \Illuminate\Http\UploadedFile::fake()->image('avatar.jpg', 200, 200);
+        $file = UploadedFile::fake()->image('avatar.jpg', 200, 200);
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post('/api/v1/profile/avatar', ['avatar' => $file]);
 
         $response->assertStatus(200)->assertJson(['success' => true]);
@@ -609,11 +630,11 @@ class AuthAndBaseApiTest extends TestCase
         $this->assertStringContainsString('/storage/avatars/', $avatarUrl);
 
         // File tồn tại trên disk public
-        $relativePath = \Illuminate\Support\Str::after($avatarUrl, '/storage/');
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($relativePath);
+        $relativePath = Str::after($avatarUrl, '/storage/');
+        Storage::disk('public')->assertExists($relativePath);
 
         // Dọn dữ liệu test
-        \Illuminate\Support\Facades\Storage::disk('public')->delete($relativePath);
+        Storage::disk('public')->delete($relativePath);
         $user->update(['avatar' => null]);
     }
 
@@ -622,9 +643,9 @@ class AuthAndBaseApiTest extends TestCase
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $file = \Illuminate\Http\UploadedFile::fake()->create('document.pdf', 100, 'application/pdf');
+        $file = UploadedFile::fake()->create('document.pdf', 100, 'application/pdf');
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post('/api/v1/profile/avatar', ['avatar' => $file]);
 
         $response->assertStatus(422)->assertJson(['success' => false]);
@@ -632,31 +653,31 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_avatar_upload_replaces_old_local_file(): void
     {
-        \Illuminate\Support\Facades\Storage::fake('public');
+        Storage::fake('public');
 
         $user = User::where('email', 'minhanh@example.com')->first();
         $token = $user->createToken('test_token')->plainTextToken;
 
-        $first = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $first = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post('/api/v1/profile/avatar', [
-                'avatar' => \Illuminate\Http\UploadedFile::fake()->image('old.jpg'),
+                'avatar' => UploadedFile::fake()->image('old.jpg'),
             ]);
         $first->assertStatus(200);
-        $oldRelative = \Illuminate\Support\Str::after($first->json('data.avatar'), '/storage/');
+        $oldRelative = Str::after($first->json('data.avatar'), '/storage/');
 
-        $second = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $second = $this->withHeader('Authorization', 'Bearer '.$token)
             ->post('/api/v1/profile/avatar', [
-                'avatar' => \Illuminate\Http\UploadedFile::fake()->image('new.jpg'),
+                'avatar' => UploadedFile::fake()->image('new.jpg'),
             ]);
         $second->assertStatus(200);
 
         // File cũ đã bị xóa, file mới tồn tại
-        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($oldRelative);
-        $newRelative = \Illuminate\Support\Str::after($second->json('data.avatar'), '/storage/');
-        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($newRelative);
+        Storage::disk('public')->assertMissing($oldRelative);
+        $newRelative = Str::after($second->json('data.avatar'), '/storage/');
+        Storage::disk('public')->assertExists($newRelative);
 
         // Dọn dữ liệu test
-        \Illuminate\Support\Facades\Storage::disk('public')->delete($newRelative);
+        Storage::disk('public')->delete($newRelative);
         $user->update(['avatar' => null]);
     }
 
@@ -668,7 +689,7 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_admin_can_list_users_with_pagination(): void
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->adminToken())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
             ->getJson('/api/v1/admin/users?per_page=2');
 
         $response->assertStatus(200)
@@ -678,7 +699,7 @@ class AuthAndBaseApiTest extends TestCase
 
     public function test_admin_can_search_users(): void
     {
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->adminToken())
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
             ->getJson('/api/v1/admin/users?search=minhanh');
 
         $response->assertStatus(200)->assertJson(['success' => true]);
@@ -686,7 +707,7 @@ class AuthAndBaseApiTest extends TestCase
         foreach ($response->json('data.data') as $row) {
             $this->assertStringContainsStringIgnoringCase(
                 'minhanh',
-                ($row['full_name'] ?? '') . ($row['email'] ?? '') . ($row['phone'] ?? '')
+                ($row['full_name'] ?? '').($row['email'] ?? '').($row['phone'] ?? '')
             );
         }
     }
@@ -696,7 +717,7 @@ class AuthAndBaseApiTest extends TestCase
         $customer = User::where('role', 'customer')->first();
         $token = $customer->createToken('customer_token')->plainTextToken;
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/admin/users');
 
         $response->assertStatus(403)->assertJson(['success' => false]);
@@ -714,8 +735,8 @@ class AuthAndBaseApiTest extends TestCase
         ]);
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
-                ->putJson('/api/v1/admin/users/' . $target->id . '/status', [
+            $response = $this->withHeader('Authorization', 'Bearer '.$adminToken)
+                ->putJson('/api/v1/admin/users/'.$target->id.'/status', [
                     'status' => 'blocked',
                 ]);
 
@@ -752,8 +773,8 @@ class AuthAndBaseApiTest extends TestCase
     {
         $admin = User::where('email', 'admin@sportzone.local')->first();
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->adminToken())
-            ->putJson('/api/v1/admin/users/' . $admin->id . '/status', [
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
+            ->putJson('/api/v1/admin/users/'.$admin->id.'/status', [
                 'status' => 'blocked',
             ]);
 
@@ -765,16 +786,16 @@ class AuthAndBaseApiTest extends TestCase
     {
         $secondAdmin = User::create([
             'full_name' => 'Second Admin',
-            'email' => 'admin2_' . uniqid() . '@sportzone.local',
-            'phone' => '09' . mt_rand(10000000, 99999999),
-            'password_hash' => \Illuminate\Support\Facades\Hash::make('password'),
+            'email' => 'admin2_'.uniqid().'@sportzone.local',
+            'phone' => '09'.mt_rand(10000000, 99999999),
+            'password_hash' => Hash::make('password'),
             'role' => 'admin',
             'status' => 'active',
         ]);
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $this->adminToken())
-                ->putJson('/api/v1/admin/users/' . $secondAdmin->id . '/status', [
+            $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
+                ->putJson('/api/v1/admin/users/'.$secondAdmin->id.'/status', [
                     'status' => 'blocked',
                 ]);
 
@@ -790,8 +811,8 @@ class AuthAndBaseApiTest extends TestCase
         $target = User::where('email', 'minhanh@example.com')->first();
 
         try {
-            $response = $this->withHeader('Authorization', 'Bearer ' . $adminToken)
-                ->putJson('/api/v1/admin/users/' . $target->id . '/role', [
+            $response = $this->withHeader('Authorization', 'Bearer '.$adminToken)
+                ->putJson('/api/v1/admin/users/'.$target->id.'/role', [
                     'role' => 'owner',
                 ]);
 
@@ -807,8 +828,8 @@ class AuthAndBaseApiTest extends TestCase
     {
         $admin = User::where('email', 'admin@sportzone.local')->first();
 
-        $response = $this->withHeader('Authorization', 'Bearer ' . $this->adminToken())
-            ->putJson('/api/v1/admin/users/' . $admin->id . '/role', [
+        $response = $this->withHeader('Authorization', 'Bearer '.$this->adminToken())
+            ->putJson('/api/v1/admin/users/'.$admin->id.'/role', [
                 'role' => 'customer',
             ]);
 

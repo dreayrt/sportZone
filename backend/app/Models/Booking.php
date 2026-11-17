@@ -7,10 +7,25 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class Booking extends Model
 {
     use HasFactory;
+
+    public const PAYMENT_TIMEOUT_MINUTES = 30;
+
+    public function paymentExpiresAt(): Carbon
+    {
+        return $this->created_at->copy()->addMinutes(self::PAYMENT_TIMEOUT_MINUTES);
+    }
+
+    public function isPaymentExpired(): bool
+    {
+        return $this->payment_method === 'vietqr'
+            && in_array($this->payment_status, ['unpaid', 'partial'], true)
+            && now()->greaterThanOrEqualTo($this->paymentExpiresAt());
+    }
 
     protected $table = 'bookings';
 

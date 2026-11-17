@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { BookingQrScanner } from "@/components/bookings/BookingQrScanner";
+import { parseBookingCheckInCode } from "@/lib/booking-checkin-code";
 import { OwnerBookingForm } from "@/components/bookings/OwnerBookingForm";
 import { OwnerModal } from "@/components/bookings/OwnerModal";
 import {
@@ -185,8 +186,10 @@ export default function OwnerBookingsPage() {
     setScanning(false);
     setBusy(true);
     setError("");
+    let scannedCode = "";
     try {
-      const booking = await ownerBookingRequest(code.trim().toUpperCase());
+      scannedCode = parseBookingCheckInCode(code);
+      const booking = await ownerBookingRequest(scannedCode);
       if (String(booking.venue_id) !== venueId)
         throw new Error(
           "Mã QR thuộc cơ sở khác. Hãy chọn đúng cơ sở trước khi check-in.",
@@ -195,7 +198,8 @@ export default function OwnerBookingsPage() {
       setMessage(`Đã check-in đơn ${booking.booking_code}.`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không check-in được đơn.");
+      const reason = e instanceof Error ? e.message : "Không check-in được đơn.";
+      setError(scannedCode ? `Đã đọc mã ${scannedCode}. ${reason}` : reason);
     } finally {
       setBusy(false);
     }

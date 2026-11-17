@@ -20,6 +20,7 @@ vendor/
 # Next.js & Frontend Build Outputs
 .next/
 **/.next/
+**/.next-dev/
 out/
 build/
 dist/

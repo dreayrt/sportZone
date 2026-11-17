@@ -21,6 +21,10 @@ export default function SocialCallbackPage() {
 
   useEffect(() => {
     const handleCallback = async () => {
+      if (provider !== 'google') {
+        setErrorMsg('Phương thức đăng nhập này không còn được hỗ trợ. Vui lòng đăng nhập bằng Google hoặc mật khẩu.');
+        return;
+      }
       const token = searchParams.get('token');
       const error = searchParams.get('error');
 
@@ -79,7 +83,7 @@ export default function SocialCallbackPage() {
               <>
                 <Loader2 className="w-8 h-8 animate-spin mx-auto text-sport-500" />
                 <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
-                  Đang đăng nhập bằng {provider === 'google' ? 'Google' : 'Facebook'}...
+                  Đang đăng nhập bằng Google...
                 </h2>
                 <p className="text-xs text-neutral-500">
                   Vui lòng đợi trong giây lát, đang xác thực tài khoản của bạn.

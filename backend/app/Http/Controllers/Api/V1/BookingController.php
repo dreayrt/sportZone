@@ -131,7 +131,7 @@ class BookingController extends BaseController
             'addons' => 'nullable|array',
             'addons.*.addon_id' => 'required|integer|distinct|exists:addons,id',
             'addons.*.quantity' => 'required|integer|min:1',
-            'voucher_code' => 'nullable|string|max:50',
+            'voucher_code' => 'sometimes|nullable|string|max:50',
         ];
 
         if ($isStaffBooking) {
@@ -464,7 +464,11 @@ class BookingController extends BaseController
             'court' => [
                 'id' => $court->id,
                 'name' => $court->name,
+                'venue_id' => $court->venue_id,
+                'venue_slug' => $court->venue?->slug,
                 'venue_name' => $court->venue?->name,
+                'min_booking_minutes' => $court->min_booking_minutes,
+                'slot_minutes' => $court->slot_minutes,
                 'hourly_rate_standard' => $court->hourly_rate_standard,
                 'hourly_rate_peak' => $court->hourly_rate_peak,
                 'peak_start' => $court->peak_start,

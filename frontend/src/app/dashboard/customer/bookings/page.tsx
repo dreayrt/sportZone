@@ -296,9 +296,9 @@ export default function CustomerBookingsPage() {
         {/* QR & Detail Modal */}
         {selectedBooking && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-sm w-full p-6 space-y-5 text-center shadow-xl">
+            <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl max-w-sm w-full max-h-[90dvh] overflow-y-auto p-6 space-y-5 text-center shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-100 dark:border-neutral-800 pb-3">
-                <span className="font-mono text-xs font-semibold text-neutral-500">THẺ VÀO SÂN (CHECK-IN)</span>
+                <span className="font-mono text-xs font-semibold text-neutral-500">{selectedBooking.payment_status === 'paid' ? 'THẺ VÀO SÂN (CHECK-IN)' : 'THÔNG TIN THANH TOÁN'}</span>
                 <button
                   onClick={() => setSelectedBooking(null)}
                   className="text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
@@ -309,11 +309,14 @@ export default function CustomerBookingsPage() {
 
               {/* Show the payment provider QR only for unpaid bookings; paid bookings use the booking code for check-in. */}
               <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 flex flex-col items-center justify-center space-y-3">
-                <div className="w-44 h-44 bg-white p-2 rounded-lg border border-neutral-200 shadow-xs flex items-center justify-center">
+                <p className="text-sm font-semibold">{selectedBooking.payment_status === 'paid' ? 'QR check-in tại sân' : 'Thanh toán SePay'}</p>
+                <div className="w-64 h-64 max-w-full bg-white rounded-lg border border-neutral-200 flex items-center justify-center overflow-hidden">
                   {paymentQr && selectedBooking.payment_status !== 'paid' ? (
                     <img src={paymentQr.qr_image_url} alt="QR thanh toán SePay" className="w-full h-full object-contain" />
+                  ) : selectedBooking.payment_status === 'paid' ? (
+                    <QRCodeSVG value={selectedBooking.booking_code} size={256} level="H" minVersion={2} includeMargin className="h-auto max-w-full" title={`Mã check-in ${selectedBooking.booking_code}`} />
                   ) : (
-                    <QRCodeSVG value={selectedBooking.booking_code} size={160} level="M" includeMargin title={`Mã check-in ${selectedBooking.booking_code}`} />
+                    <p className="px-5 text-sm text-neutral-500">Thanh toán đủ để nhận QR check-in tại sân.</p>
                   )}
                 </div>
                 <span className="text-base font-mono font-bold tracking-widest text-neutral-900 dark:text-white">
@@ -341,7 +344,7 @@ export default function CustomerBookingsPage() {
                 <p><strong>Địa chỉ:</strong> {selectedBooking.venue?.address}, {selectedBooking.venue?.city}</p>
                 <p><strong>Khung giờ:</strong> {selectedBooking.start_time.slice(0, 5)} - {selectedBooking.end_time.slice(0, 5)} ngày {formatDate(selectedBooking.booking_date)}</p>
                 <p><strong>Tổng tiền:</strong> <span className="font-mono font-bold text-sport-600">{formatVND(selectedBooking.total_price)}</span> ({selectedBooking.payment_status === 'paid' ? 'Đã thanh toán' : selectedBooking.payment_status === 'partial' ? 'Đã thanh toán một phần' : 'Chưa thanh toán'})</p>
-                <p className="text-neutral-400 text-[11px] pt-1">Xuất trình mã này cho nhân viên lễ tân tại sân để quét xác nhận.</p>
+                <p className="text-neutral-500 text-[11px] pt-1">{selectedBooking.payment_status === 'paid' ? 'Xuất trình QR check-in cho lễ tân. Tăng độ sáng màn hình, giữ mã thẳng và tránh phản chiếu.' : 'QR thanh toán dùng để chuyển khoản, không dùng để check-in. Sau khi thanh toán đủ, hệ thống sẽ hiển thị QR check-in.'}</p>
               </div>
 
               <Button
