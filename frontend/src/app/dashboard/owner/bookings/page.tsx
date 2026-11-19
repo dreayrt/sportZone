@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { BookingQrScanner } from "@/components/bookings/BookingQrScanner";
 import { parseBookingCheckInCode } from "@/lib/booking-checkin-code";
 import { OwnerBookingForm } from "@/components/bookings/OwnerBookingForm";
@@ -456,7 +457,19 @@ export default function OwnerBookingsPage() {
           </button>
         </div>
         {loading ? (
-          <Notice>Đang tải đơn đặt…</Notice>
+          <div role="status" aria-label="Đang tải dữ liệu" className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3 w-2/5" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+                <Skeleton className="h-6 w-24 rounded-full" />
+              </div>
+            ))}
+            <span className="sr-only">Đang tải dữ liệu…</span>
+          </div>
         ) : bookings.length === 0 ? (
           <Notice>
             {error

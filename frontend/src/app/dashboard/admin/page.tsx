@@ -7,7 +7,6 @@ import {
   CalendarCheck,
   CheckCircle2,
   CircleDollarSign,
-  RefreshCw,
   ShieldCheck,
   UserRoundCheck,
   Users,
@@ -18,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { api, type AdminAnalyticsData } from '@/lib/api';
 import { formatVND } from '@/lib/utils';
+import { SkeletonPanel, SkeletonStats } from '@/components/layout/RouteSkeletons';
 
 const bookingStatusLabels: Array<{
   key: keyof AdminAnalyticsData['booking_statistics'];
@@ -66,12 +66,10 @@ export default function AdminDashboardPage() {
 
       <div className="mx-auto max-w-7xl space-y-6 p-6">
         {isLoading && (
-          <Card>
-            <CardContent className="flex min-h-64 items-center justify-center p-8 text-sm text-neutral-500">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Đang tải dữ liệu thống kê...
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <SkeletonStats />
+            <SkeletonPanel />
+          </div>
         )}
 
         {!isLoading && error && (

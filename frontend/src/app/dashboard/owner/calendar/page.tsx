@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SkeletonPanel } from "@/components/layout/RouteSkeletons";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
@@ -299,7 +300,7 @@ export default function OwnerCalendarPage() {
         </div>
         {loading ? (
           <div className="p-8">
-            <Notice>Đang tải lịch sân…</Notice>
+            <SkeletonPanel />
           </div>
         ) : !venue ? (
           <div className="p-8">

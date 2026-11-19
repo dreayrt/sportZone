@@ -12,6 +12,7 @@ import {
   secondaryClass,
 } from "@/components/venues/Shared";
 import CourtCalendar from "@/components/venues/CourtCalendar";
+import { DetailRouteSkeleton } from "@/components/layout/RouteSkeletons";
 export default function Page() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function Page() {
   if (!venue)
     return (
       <div className="p-8">
-        <Notice>Đang tải cơ sở…</Notice>
+        <DetailRouteSkeleton />
       </div>
     );
   const address = [venue.address, venue.ward, venue.district, venue.city]

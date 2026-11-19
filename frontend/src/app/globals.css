@@ -63,8 +63,7 @@
 }
 
 /* Subtle scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
+::-webkit-scrollbar {  width: 6px;
   height: 6px;
 }
 
@@ -134,4 +133,44 @@
 
 .dark ::-webkit-scrollbar-thumb {
   background: #27272a;
+}
+
+/* Loading skeleton with shimmer sweep */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background-color: rgba(212, 212, 216, 0.4);
+}
+
+.dark .skeleton {
+  background-color: rgba(63, 63, 70, 0.4);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: shimmer 1.8s infinite;
+}
+
+.dark .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+}
+
+/* Respect users who prefer minimal motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton::after {
+    animation: none;
+  }
 }

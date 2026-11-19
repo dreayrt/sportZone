@@ -6,6 +6,7 @@ import { Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { api, MatchPostItem } from '@/lib/api';
 import { MatchPostCard } from '@/components/matches/MatchPostCard';
 import { Button } from '@/components/ui/Button';
+import { SkeletonCards } from '@/components/layout/RouteSkeletons';
 
 interface SportCategoryOption {
   id: number;
@@ -101,7 +102,7 @@ export default function MatchesPage() {
 
       {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-neutral-500">Đang tải các kèo đang mở...</div>
+        <SkeletonCards count={6} variant="compact" />
       ) : matches.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {matches.map((match) => <MatchPostCard key={match.id} match={match} />)}

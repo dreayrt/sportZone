@@ -8,7 +8,6 @@ import {
   Copy,
   Gift,
   Link2,
-  RefreshCw,
   Share2,
   Users,
 } from 'lucide-react';
@@ -17,6 +16,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { api, type ReferralData, type ReferralRewardStatus } from '@/lib/api';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 const statusPresentation: Record<
   ReferralRewardStatus,
@@ -136,12 +136,22 @@ export default function CustomerReferralPage() {
 
       <div className="mx-auto max-w-7xl space-y-6 p-6">
         {isLoading && (
-          <Card>
-            <CardContent className="flex min-h-64 items-center justify-center p-8 text-sm text-neutral-500">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Đang tải chương trình giới thiệu...
-            </CardContent>
-          </Card>
+          <div role="status" aria-label="Đang tải dữ liệu" className="space-y-6">
+            <span className="sr-only">Đang tải dữ liệu…</span>
+            <div className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="h-8 w-28 rounded-lg" />
+              </div>
+              <Skeleton className="h-3 w-3/4" />
+              <Skeleton className="h-10 w-full rounded-xl" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-56 rounded-2xl" style={{ animationDelay: `${(i + 3) * 40}ms` }} />
+              ))}
+            </div>
+          </div>
         )}
 
         {!isLoading && error && (

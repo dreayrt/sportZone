@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { cn } from '@/lib/utils';
 import { 
   Compass, 
   Trophy, 
@@ -15,19 +16,31 @@ import {
   Building2, 
   ShieldCheck, 
   Users,
-  ArrowRight,
   LogOut
 } from 'lucide-react';
 
 export function Navbar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const [sportFilter, setSportFilter] = useState('');
+
+  useEffect(() => {
+    setSportFilter(new URLSearchParams(window.location.search).get('sport') || '');
+  }, [pathname]);
 
   const isDashboard = pathname.startsWith('/dashboard');
 
   if (isDashboard) {
     return null; // Dashboard has its own sidebar & header
   }
+
+  const navItems = [
+    { href: '/venues', label: 'Tìm sân thể thao', icon: Compass, active: pathname.startsWith('/venues') && !sportFilter },
+    { href: '/venues?sport=pickleball', label: 'Pickleball & Tennis', icon: Flame, active: pathname.startsWith('/venues') && sportFilter === 'pickleball' },
+    { href: '/venues?sport=football', label: 'Bóng đá mini', icon: Trophy, active: pathname.startsWith('/venues') && sportFilter === 'football' },
+    { href: '/venues?sport=badminton', label: 'Cầu lông', icon: Zap, active: pathname.startsWith('/venues') && sportFilter === 'badminton' },
+    { href: '/matches', label: 'Ghép kèo', icon: Users, active: pathname.startsWith('/matches') },
+  ];
 
   const getDashboardLink = () => {
     if (!user) return '/auth/login';
@@ -71,41 +84,22 @@ export function Navbar() {
 
           {/* Navigation Links - Clean, single-line, refined stroke icons */}
           <nav className="hidden lg:flex items-center gap-1">
-            <Link
-              href="/venues"
-              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
-            >
-              <Compass className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
-              <span>Tìm sân thể thao</span>
-            </Link>
-            <Link
-              href="/venues?sport=pickleball"
-              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
-            >
-              <Flame className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
-              <span>Pickleball & Tennis</span>
-            </Link>
-            <Link
-              href="/venues?sport=football"
-              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
-            >
-              <Trophy className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
-              <span>Bóng đá mini</span>
-            </Link>
-            <Link
-              href="/venues?sport=badminton"
-              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
-            >
-              <Zap className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
-              <span>Cầu lông</span>
-            </Link>
-            <Link
-              href="/matches"
-              className="px-3 py-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/70 transition-colors flex items-center gap-2 whitespace-nowrap"
-            >
-              <Users className="w-4 h-4 text-neutral-500 shrink-0" strokeWidth={1.5} />
-              <span>Ghép kèo</span>
-            </Link>
+            {navItems.map(({ href, label, icon: Icon, active }) => (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  "px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 whitespace-nowrap",
+                  active
+                    ? 'bg-sport-100 text-sport-800 font-semibold dark:bg-sport-950 dark:text-sport-300'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:text-white dark:hover:bg-neutral-800/70'
+                )}
+              >
+                <Icon className={cn('w-4 h-4 shrink-0', active ? 'text-sport-600 dark:text-sport-300' : 'text-neutral-500')} strokeWidth={1.5} />
+                <span>{label}</span>
+              </Link>
+            ))}
           </nav>
         </div>
 
@@ -131,14 +125,6 @@ export function Navbar() {
                     {getRoleLabel(user.role)}
                   </span>
                 </div>
-              </Link>
-
-              {/* Enter Dashboard CTA */}
-              <Link href={getDashboardLink()}>
-                <Button variant="primary" size="sm" className="gap-1.5 whitespace-nowrap font-medium">
-                  <span>Dashboard</span>
-                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
-                </Button>
               </Link>
 
               {/* Logout Button */}

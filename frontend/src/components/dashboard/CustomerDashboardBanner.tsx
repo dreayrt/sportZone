@@ -4,15 +4,11 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
-  Trophy,
-  Sparkles,
   Zap,
   ArrowUpRight,
   Flame,
-  CalendarCheck,
   ChevronRight,
-  ChevronLeft,
-  Timer
+  ChevronLeft
 } from 'lucide-react';
 
 interface PromoSlide {
@@ -22,8 +18,6 @@ interface PromoSlide {
   title: string;
   description: string;
   highlightBadge: string;
-  metricLabel: string;
-  metricValue: string;
   ctaText: string;
   ctaLink: string;
   secondaryCtaText?: string;
@@ -32,21 +26,6 @@ interface PromoSlide {
 
 const SLIDES: PromoSlide[] = [
   {
-    id: 'summer-cup-2026',
-    eyebrow: 'GIẢI ĐẤU MÙA HÈ 2026',
-    eyebrowIcon: <Trophy className="w-3 h-3 text-sport-400" strokeWidth={1.75} />,
-    title: 'Khởi Tranh SportZone Summer Cup: Pickleball & Cầu Lông',
-    description:
-      'Tổng quỹ thưởng 50.000.000đ dành cho các vận động viên phong trào. Đăng ký thi đấu đơn hoặc đôi tại cụm sân SportZone Chấn Hưng ngay hôm nay.',
-    highlightBadge: '🔥 82% Vé Ghi Danh Đã Kín',
-    metricLabel: 'Vận Động Viên Đã Tham Gia',
-    metricValue: '1,240+',
-    ctaText: 'Đăng Ký Thi Đấu Ngay',
-    ctaLink: '/venues',
-    secondaryCtaText: 'Xem Thể Lệ Giải Đấu',
-    secondaryCtaLink: '/venues',
-  },
-  {
     id: 'golden-hour-promo',
     eyebrow: 'ƯU ĐÃI GIỜ VÀNG',
     eyebrowIcon: <Zap className="w-3 h-3 text-amber-400" strokeWidth={1.75} />,
@@ -54,27 +33,10 @@ const SLIDES: PromoSlide[] = [
     description:
       'Đặt sân trước tối thiểu 2 giờ để tự động nhận mã hoàn xu vào ví thành viên. Tích lũy điểm để quy đổi thành giờ chơi miễn phí hoặc nước uống tại sân.',
     highlightBadge: '⚡ Tự Động Áp Dụng Khi Thanh Toán',
-    metricLabel: 'Số Lượt Đặt Đã Tận Dụng',
-    metricValue: '850+ Đơn',
     ctaText: 'Tìm Sân Giờ Vàng Trống',
     ctaLink: '/venues',
     secondaryCtaText: 'Xem Cụm Sân Áp Dụng',
     secondaryCtaLink: '/venues',
-  },
-  {
-    id: 'loyalty-gold-tier',
-    eyebrow: 'ĐẶC QUYỀN THÀNH VIÊN',
-    eyebrowIcon: <Sparkles className="w-3 h-3 text-sky-400" strokeWidth={1.75} />,
-    title: 'Chỉ Còn 150 Điểm Để Mở Khóa Thẻ Hội Viên Hạng Gold',
-    description:
-      'Hội viên Gold được ưu tiên giữ khung giờ cố định cả tháng, miễn phí mượn vợt chuẩn thi đấu và giảm trực tiếp 10% cho mọi dịch vụ thuê sân.',
-    highlightBadge: '💎 Tiến Trình Hạng: 350 / 500 XP',
-    metricLabel: 'Hạng Hội Viên Hiện Tại',
-    metricValue: 'Silver Tier',
-    ctaText: 'Khám Phá Điểm Thưởng',
-    ctaLink: '/dashboard/customer/loyalty',
-    secondaryCtaText: 'Mời Bạn Nhận 50 Điểm',
-    secondaryCtaLink: '/dashboard/customer/referral',
   },
 ];
 
@@ -181,21 +143,6 @@ export function CustomerDashboardBanner() {
                   </button>
                 </Link>
               )}
-            </div>
-
-            {/* Live Metric Capsule */}
-            <div className="hidden md:flex items-center gap-4 bg-neutral-900/60 border border-white/10 px-4 py-2 rounded-2xl backdrop-blur-md">
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] uppercase tracking-wider text-neutral-400">
-                  {slide.metricLabel}
-                </span>
-                <span className="text-sm font-bold font-mono text-sport-400 tabular-nums">
-                  {slide.metricValue}
-                </span>
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-sport-500/20 border border-sport-500/30 flex items-center justify-center text-sport-400">
-                <CalendarCheck className="w-4 h-4" strokeWidth={1.75} />
-              </div>
             </div>
           </div>
         </div>

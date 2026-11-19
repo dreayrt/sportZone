@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
+import { SkeletonCards, SkeletonPanel } from '@/components/layout/RouteSkeletons';
 import { MatchPostCard } from '@/components/matches/MatchPostCard';
 import { Button } from '@/components/ui/Button';
 import { api, MatchPostItem } from '@/lib/api';
@@ -43,7 +44,7 @@ export default function CustomerMatchesPage() {
           <button onClick={() => setTab('joined')} className={`px-3 py-2 text-sm border-b-2 ${tab === 'joined' ? 'border-sport-500 text-sport-700' : 'border-transparent text-neutral-500'}`}>Kèo đã xin tham gia ({joined.length})</button>
         </div>
         {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-        {isLoading ? <p className="py-12 text-center text-sm text-neutral-500">Đang tải kèo...</p> : matches.length > 0 ? (
+        {isLoading ? <SkeletonCards count={6} variant="compact" /> : matches.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">{matches.map((match) => <MatchPostCard key={match.id} match={match} />)}</div>
         ) : (
           <div className="py-14 text-center rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700">

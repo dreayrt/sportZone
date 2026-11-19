@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -21,11 +22,27 @@ import {
   Home,
   ArrowLeft,
   Star,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+
+const COLLAPSE_KEY = "sz_sidebar_collapsed";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      localStorage.setItem(COLLAPSE_KEY, current ? "0" : "1");
+      return !current;
+    });
+  };
 
   const role = user?.role || "customer";
 
@@ -172,33 +189,62 @@ export function DashboardSidebar() {
           </nav>
         </details>
       </div>
-      <aside className="hidden sm:flex w-64 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex-col justify-between h-screen sticky top-0">
+      <aside
+        className={cn(
+          "relative hidden sm:flex shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex-col justify-between h-screen sticky top-0 overflow-visible transition-[width] duration-300 ease-in-out z-40",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"}
+          title={collapsed ? "Mở rộng menu" : "Thu gọn menu"}
+          className="absolute top-4 -right-3.5 z-40 flex items-center justify-center w-7 h-7 rounded-full border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-500 dark:text-neutral-400 shadow-sm hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors"
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" strokeWidth={2} />
+          ) : (
+            <ChevronLeft className="w-4 h-4" strokeWidth={2} />
+          )}
+        </button>
         {/* Brand & Role Header */}
-        <div>
-          <div className="h-16 border-b border-neutral-200 dark:border-neutral-800 px-5 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-neutral-900 dark:bg-white flex items-center justify-center text-white dark:text-neutral-950 font-bold text-sm tracking-tighter">
+        <div className="min-w-0">
+          <div className="h-16 border-b border-neutral-200 dark:border-neutral-800 px-3 flex items-center justify-between gap-2">
+            <Link
+              href="/"
+              className={cn("flex items-center gap-2.5 min-w-0", collapsed && "mx-auto")}
+              title="SportZone"
+            >
+              <div className="w-8 h-8 shrink-0 rounded-lg bg-neutral-900 dark:bg-white flex items-center justify-center text-white dark:text-neutral-950 font-bold text-sm tracking-tighter">
                 <span className="text-sport-500 font-extrabold">S</span>
                 <span className="text-xs">Z</span>
               </div>
-              <span className="font-bold text-base tracking-tight text-neutral-900 dark:text-white">
-                SportZone
-              </span>
+              {!collapsed && (
+                <span className="font-bold text-base tracking-tight text-neutral-900 dark:text-white whitespace-nowrap">
+                  SportZone
+                </span>
+              )}
             </Link>
-            <Badge
-              variant={roleLabels[role].badge}
-              size="sm"
-              className="text-[10px] uppercase font-semibold"
-            >
-              {roleLabels[role].label}
-            </Badge>
+            {!collapsed && (
+              <Badge
+                variant={roleLabels[role].badge}
+                size="sm"
+                className="text-[10px] uppercase font-semibold shrink-0"
+              >
+                {roleLabels[role].label}
+              </Badge>
+            )}
           </div>
 
           {/* Menu Navigation */}
           <div className="p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 px-3 py-2">
-              Phân hệ {roleLabels[role].label}
-            </div>
+            {!collapsed && (
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 px-3 py-2">
+                Phân hệ {roleLabels[role].label}
+              </div>
+            )}
             <nav className="space-y-1">
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
@@ -207,21 +253,27 @@ export function DashboardSidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                    title={collapsed ? item.title : undefined}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cn(
+                      "flex items-center gap-3 text-sm font-medium rounded-lg transition-all",
+                      collapsed ? "justify-center w-10 h-10 mx-auto" : "px-3 py-2",
                       isActive
                         ? "bg-sport-50 text-sport-700 dark:bg-sport-950/40 dark:text-sport-400 font-semibold"
                         : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-900 dark:hover:text-neutral-200"
-                    }`}
+                    )}
                   >
                     <Icon
-                      className={`w-4 h-4 ${
+                      className={cn(
+                        "shrink-0",
+                        collapsed ? "w-5 h-5" : "w-4 h-4",
                         isActive
                           ? "text-sport-600 dark:text-sport-400"
-                          : "text-neutral-400 dark:text-neutral-500"
-                      }`}
-                      strokeWidth={1.5}
+                          : "text-neutral-500 dark:text-neutral-300"
+                      )}
+                      strokeWidth={2}
                     />
-                    <span>{item.title}</span>
+                    {!collapsed && <span className="truncate">{item.title}</span>}
                   </Link>
                 );
               })}
@@ -233,23 +285,40 @@ export function DashboardSidebar() {
         <div className="p-3 border-t border-neutral-200 dark:border-neutral-800">
           <Link
             href="/"
-            className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors mb-2"
+            title="Về Cổng đặt sân SportZone"
+            className={cn(
+              "flex items-center gap-2 py-2 text-xs font-medium text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-lg transition-colors mb-2",
+              collapsed ? "justify-center px-2" : "px-3"
+            )}
           >
-            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={1.5} />
-            <span>Về Cổng đặt sân SportZone</span>
+            {collapsed ? (
+              <Home className="w-4 h-4 shrink-0" strokeWidth={1.5} />
+            ) : (
+              <>
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Về Cổng đặt sân SportZone</span>
+              </>
+            )}
           </Link>
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-100 dark:border-neutral-800/80">
-            <div className="w-8 h-8 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center font-bold text-xs text-neutral-700 dark:text-neutral-300 uppercase">
+          <div
+            className={cn(
+              "flex items-center gap-3 py-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-100 dark:border-neutral-800/80",
+              collapsed ? "justify-center px-2" : "px-3"
+            )}
+          >
+            <div className="w-8 h-8 shrink-0 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center font-bold text-xs text-neutral-700 dark:text-neutral-300 uppercase">
               {user?.full_name?.charAt(0) || "U"}
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
-                {user?.full_name || "Người dùng"}
-              </span>
-              <span className="text-[11px] text-neutral-400 truncate">
-                {user?.phone || user?.email || "SportZone User"}
-              </span>
-            </div>
+            {!collapsed && (
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 truncate">
+                  {user?.full_name || "Người dùng"}
+                </span>
+                <span className="text-[11px] text-neutral-400 truncate">
+                  {user?.phone || user?.email || "SportZone User"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </aside>

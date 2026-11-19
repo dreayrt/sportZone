@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
+import { SkeletonCards } from "@/components/layout/RouteSkeletons";
 import { Notice, inputClass, buttonClass, secondaryClass } from "@/components/venues/Shared";
 import { venueRequest } from "@/lib/venues-api";
 import type { AdminCategory } from "@/lib/admin-api";
@@ -49,7 +50,7 @@ export default function AdminCategoriesPage() {
         </form>
       </section>}
       <div className="flex flex-wrap gap-3"><input aria-label="Tìm môn thể thao" placeholder="Tìm theo mã hoặc tên môn" className={`${inputClass} max-w-sm`} value={search} onChange={(e) => setSearch(e.target.value)} /><select aria-label="Trạng thái môn thể thao" className={`${inputClass} max-w-48`} value={status} onChange={(e) => setStatus(e.target.value)}><option value="">Tất cả trạng thái</option><option value="true">Hoạt động</option><option value="false">Tạm ngưng</option></select><button className={secondaryClass} disabled={loading || busy} onClick={() => setRetry((n) => n + 1)}>Làm mới</button></div>
-      {loading ? <p role="status" className="text-sm text-neutral-500">Đang tải danh mục…</p> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visible.map((c) => <article key={c.id} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+      {loading ? <SkeletonCards count={6} variant="venue" className="sm:grid-cols-2 xl:grid-cols-3" /> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visible.map((c) => <article key={c.id} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         {c.banner_image ? <img src={c.banner_image} alt={c.name} className="h-36 w-full object-cover" /> : <div className="flex h-36 items-center justify-center bg-sport-50 text-sport-600 dark:bg-sport-950/30"><Trophy className="h-10 w-10" /></div>}
         <div className="space-y-3 p-4"><div className="flex items-start justify-between gap-2"><div><p className="text-xs text-neutral-500">{c.code}</p><h2 className="font-semibold">{c.name}</h2></div><span className={`rounded-full px-2 py-1 text-xs ${c.is_active ? "bg-sport-50 text-sport-700 dark:bg-sport-950 dark:text-sport-300" : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800"}`}>{c.is_active ? "Hoạt động" : "Tạm ngưng"}</span></div>
           <p className="text-xs leading-5 text-neutral-500">{c.description || "Chưa có mô tả."}</p><p className="text-xs text-neutral-500">{c.active_courts_count} sân hoạt động / {c.courts_count} sân</p>

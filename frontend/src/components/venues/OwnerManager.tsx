@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Filters, Venue, Sport, venueRequest } from "@/lib/venues-api";
+import { SkeletonCards } from "@/components/layout/RouteSkeletons";
 import {
   Notice,
   OwnerGuard,
@@ -776,7 +777,7 @@ function Manager({ kind }: { kind: Kind }) {
         )}
       </div>
       {loading ? (
-        <Notice>Đang tải…</Notice>
+        <SkeletonCards count={6} variant="compact" />
       ) : !filtered.length ? (
         <Notice>
           Chưa có dữ liệu phù hợp.{" "}

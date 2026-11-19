@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, AdminReviewItem } from '@/lib/api';
@@ -156,7 +157,19 @@ export default function AdminReviewsPage() {
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             {isLoading ? (
-              <div className="p-10 text-center text-sm text-neutral-500">Đang tải đánh giá...</div>
+              <div role="status" aria-label="Đang tải dữ liệu" className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                    <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-2/5" />
+                      <Skeleton className="h-3 w-3/5" />
+                    </div>
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                ))}
+                <span className="sr-only">Đang tải dữ liệu…</span>
+              </div>
             ) : reviews.length === 0 ? (
               <div className="p-10 text-center space-y-2">
                 <MessageSquare className="w-10 h-10 text-neutral-300 mx-auto" />

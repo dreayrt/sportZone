@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { formatDate, formatVND } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 const skillLabels: Record<MatchPostItem['skill_level'], string> = {
   all: 'Mọi trình độ',
@@ -71,7 +72,28 @@ export default function MatchDetailPage() {
   };
 
   if (isLoading) {
-    return <div className="max-w-5xl mx-auto px-4 py-20 text-center text-sm text-neutral-500">Đang tải thông tin kèo...</div>;
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 space-y-6" role="status" aria-label="Đang tải trang">
+        <span className="sr-only">Đang tải dữ liệu…</span>
+        <Skeleton className="h-8 w-2/3" />
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-3 w-1/5" />
+            </div>
+          </div>
+          <Skeleton className="h-3 w-3/4" />
+          <Skeleton className="h-3 w-2/3" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 rounded-xl" style={{ animationDelay: `${i * 40}ms` }} />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!match) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { SkeletonPanel } from "@/components/layout/RouteSkeletons";
 import {
   createContext,
   useCallback,
@@ -162,7 +163,7 @@ export function OwnerVenueProvider({
       {venue?.admin_suspended_at && <div className="px-4 pt-4 sm:px-6"><Notice error>Cơ sở đang bị quản trị viên tạm dừng nhận đặt sân mới. Lý do: {venue.admin_suspension_reason || "Vui lòng liên hệ quản trị viên."}</Notice></div>}
       {loading ? (
         <div className="p-6">
-          <Notice>Đang tải cơ sở quản lý…</Notice>
+          <SkeletonPanel />
         </div>
       ) : error ? (
         <div className="p-6">

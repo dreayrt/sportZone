@@ -6,6 +6,7 @@ import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   api,
   type LoyaltyHistoryData,
@@ -132,10 +133,24 @@ export default function CustomerLoyaltyPage() {
 
       <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
         {isLoading ? (
-          <div className="grid min-h-72 place-items-center rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex flex-col items-center gap-3 text-sm text-neutral-500">
-              <RefreshCw className="h-6 w-6 animate-spin text-sport-500" />
-              Đang tải thông tin điểm thưởng...
+          <div role="status" aria-label="Đang tải dữ liệu" className="space-y-6">
+            <span className="sr-only">Đang tải dữ liệu…</span>
+            <div className="rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-44" />
+                <Skeleton className="h-8 w-28 rounded-lg" />
+              </div>
+              <Skeleton className="h-3 w-3/4" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 rounded-xl" style={{ animationDelay: `${i * 40}ms` }} />
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-56 rounded-2xl" style={{ animationDelay: `${(i + 4) * 40}ms` }} />
+              ))}
             </div>
           </div>
         ) : error ? (

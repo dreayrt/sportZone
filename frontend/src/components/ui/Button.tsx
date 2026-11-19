@@ -11,12 +11,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading = false, children, disabled, ...props }, ref) => {
-    const baseStyles = "inline-flex items-center justify-center font-medium transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 rounded-lg";
-    
+    const baseStyles = "inline-flex items-center justify-center font-medium select-none touch-manipulation transition-all duration-200 ease-out active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sport-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900";
+
     const sizeStyles = {
-      sm: "text-xs px-3 py-1.5 gap-1.5",
-      md: "text-sm px-4 py-2 gap-2",
-      lg: "text-base px-5 py-2.5 gap-2.5",
+      sm: "text-xs px-3.5 py-2 min-h-9 gap-1.5",
+      md: "text-sm px-4 py-2.5 min-h-10 gap-2",
+      lg: "text-base px-5 py-3 min-h-11 gap-2.5",
     };
 
     const variantStyles = {

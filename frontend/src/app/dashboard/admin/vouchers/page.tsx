@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, VoucherItem } from '@/lib/api';
@@ -478,7 +479,19 @@ export default function AdminVouchersPage() {
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             {isLoading ? (
-              <div className="p-10 text-center text-sm text-neutral-500">Đang tải voucher...</div>
+              <div role="status" aria-label="Đang tải dữ liệu" className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                    <Skeleton className="h-8 w-24 rounded-md shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </div>
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                ))}
+                <span className="sr-only">Đang tải dữ liệu…</span>
+              </div>
             ) : vouchers.length === 0 ? (
               <div className="p-10 text-center text-sm text-neutral-500">Chưa có voucher nào phù hợp.</div>
             ) : (

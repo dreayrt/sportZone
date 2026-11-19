@@ -17,6 +17,7 @@ import {
   buttonClass,
   secondaryClass,
 } from "./Shared";
+import { GridRouteSkeleton } from "@/components/layout/RouteSkeletons";
 import VenueMap from "./VenueMap";
 export default function Directory({ mapView = false }: { mapView?: boolean }) {
   const initial = useSearchParams();
@@ -279,7 +280,7 @@ export default function Directory({ mapView = false }: { mapView?: boolean }) {
             disabled={geoBusy}
             onClick={near}
           >
-            {geoBusy ? "Đang lấy vị trí…" : "Lấy vị trí của tôi"}
+            {geoBusy ? "Đang lấy vị trí…" : "Sử dụng vị trí của tôi"}
           </button>
           {filters.lat && (
             <>
@@ -311,7 +312,7 @@ export default function Directory({ mapView = false }: { mapView?: boolean }) {
       </form>
       {error && <Notice error>{error}</Notice>}
       {loading ? (
-        <Notice>Đang tải cơ sở…</Notice>
+        <GridRouteSkeleton />
       ) : (
         data && (
           <>

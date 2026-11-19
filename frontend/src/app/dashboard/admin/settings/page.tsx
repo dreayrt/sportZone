@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
+import { SkeletonPanel } from "@/components/layout/RouteSkeletons";
 import { Notice, inputClass, buttonClass, secondaryClass } from "@/components/venues/Shared";
 import { venueRequest } from "@/lib/venues-api";
 import type { AdminSettings } from "@/lib/admin-api";
@@ -49,7 +50,7 @@ export default function AdminSettingsPage() {
     <DashboardHeader title="Cấu hình hệ thống" description="Quản lý thanh toán, tích điểm và thông tin hỗ trợ." />
     <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
       {error && <Notice error>{error}</Notice>}{message && <Notice>{message}</Notice>}
-      {loading ? <p role="status" className="text-sm text-neutral-500">Đang tải cấu hình…</p> : !form ? <button className={secondaryClass} onClick={() => setRetry((n) => n + 1)}>Thử lại</button> :
+      {loading ? <SkeletonPanel /> : !form ? <button className={secondaryClass} onClick={() => setRetry((n) => n + 1)}>Thử lại</button> :
       <form onSubmit={save} className="space-y-4">
         <fieldset disabled={saving} className="space-y-4">
         {groups.map((group) => <section key={group.title} className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">

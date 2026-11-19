@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
+import { SkeletonTableRows } from "@/components/layout/RouteSkeletons";
 import { Notice, inputClass, secondaryClass, buttonClass } from "@/components/venues/Shared";
 import { queryString, venueRequest } from "@/lib/venues-api";
 import type { PaginatedData } from "@/lib/api";
@@ -32,7 +33,7 @@ export default function AdminAuditLogsPage() {
       </form>
       <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"><div className="overflow-x-auto">
         <table className="w-full text-left text-sm"><thead className="bg-sport-50 text-xs text-sport-800 dark:bg-sport-950/40 dark:text-sport-300"><tr>{["Hành động", "Đối tượng", "Người thực hiện", "Địa chỉ IP", "Thời gian"].map((label) => <th key={label} className="whitespace-nowrap px-4 py-3 font-semibold">{label}</th>)}</tr></thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">{loading ? <tr><td colSpan={5} className="p-8 text-center text-neutral-500">Đang tải nhật ký…</td></tr> : data?.data.length ? data.data.map((log) => <tr key={log.id}>
+          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">{loading ? <SkeletonTableRows rows={6} cols={5} /> : data?.data.length ? data.data.map((log) => <tr key={log.id}>
             <td className="px-4 py-3"><span className="rounded-md bg-neutral-100 px-2 py-1 text-xs font-medium dark:bg-neutral-800">{log.action}</span></td>
             <td className="px-4 py-3 text-xs">{log.entity_type || "—"}{log.entity_id != null && ` #${log.entity_id}`}</td><td className="px-4 py-3">{log.user?.full_name || "Hệ thống / tài khoản đã xóa"}</td><td className="px-4 py-3 text-xs text-neutral-500">{log.ip_address || "—"}</td><td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">{new Date(log.created_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</td>
           </tr>) : <tr><td colSpan={5} className="p-8 text-center text-sm text-neutral-500">{error ? "Không tải được nhật ký. Hãy thử lại." : "Chưa có nhật ký phù hợp. Các thao tác quản trị mới sẽ xuất hiện tại đây."}</td></tr>}</tbody>

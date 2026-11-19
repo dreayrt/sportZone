@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2, CalendarDays } from "lucide-react";
 import { Notice, inputClass, secondaryClass } from "@/components/venues/Shared";
+import { SkeletonCards } from "@/components/layout/RouteSkeletons";
 import CourtCalendar from "@/components/venues/CourtCalendar";
 import { Court, Venue, venueRequest } from "@/lib/venues-api";
 
@@ -117,7 +118,7 @@ export default function AdminCourtCalendarPage() {
 
       {/* CHỌN SÂN THI ĐẤU & LƯỚI KHUNG GIỜ CỦA SÂN ĐÓ */}
       {loadingCourts ? (
-        <Notice>Đang tải danh sách sân thi đấu…</Notice>
+        <SkeletonCards count={6} variant="compact" />
       ) : !courts.length ? (
         <Notice>
           Cơ sở này hiện chưa có sân thi đấu nào được tạo.{" "}

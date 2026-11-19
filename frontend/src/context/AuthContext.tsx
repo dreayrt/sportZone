@@ -21,7 +21,7 @@ export interface AuthUser {
   status: 'active' | 'blocked';
   avatar?: string | null;
   has_password?: boolean;
-  socialAccounts?: LinkedSocialAccount[];
+  social_accounts?: LinkedSocialAccount[];
   points?: {
     total_points: number;
     lifetime_points: number;

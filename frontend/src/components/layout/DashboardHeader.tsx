@@ -1,13 +1,11 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useOptionalOwnerVenue } from "@/context/OwnerVenueContext";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import {
   LogOut,
-  ExternalLink,
   ShieldCheck,
   Building2,
   User,
@@ -76,18 +74,6 @@ export function DashboardHeader({
       <div className="flex flex-wrap items-center gap-3">
         {/* Custom Actions if provided by individual page */}
         {actions}
-
-        {/* View Public Site Link */}
-        <Link
-          href="/"
-          className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors border border-neutral-200/60 dark:border-neutral-800"
-        >
-          <span>Trang chủ</span>
-          <ExternalLink
-            className="w-3 h-3 text-neutral-400"
-            strokeWidth={1.5}
-          />
-        </Link>
 
         {/* Current User Info & Role Badge */}
         {user && (

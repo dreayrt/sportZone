@@ -1,17 +1,23 @@
 "use client";
 import React, { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { venueRequest } from '@/lib/venues-api';
 import Link from 'next/link';
 import { Phone, Mail, Shield, CheckCircle2 } from 'lucide-react';
 
 export function Footer() {
   const [hotline, setHotline] = useState('1900 6868');
+  const pathname = usePathname();
+
   useEffect(() => {
     const ac = new AbortController();
     venueRequest<{ hotline: string }>('/settings/public', 'GET', undefined, ac.signal)
       .then((data) => { if (!ac.signal.aborted) setHotline(data.hotline); }).catch(() => {});
     return () => ac.abort();
   }, []);
+
+  if (pathname.startsWith('/dashboard')) return null;
+
   return (
     <footer className="border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/60 mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">

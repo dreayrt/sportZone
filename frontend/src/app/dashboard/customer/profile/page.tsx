@@ -163,7 +163,7 @@ function CustomerProfileContent() {
   };
 
   const getLinkedAccount = (provider: SocialKey) =>
-    user?.socialAccounts?.find((a) => a.provider === provider);
+    user?.social_accounts?.find((a) => a.provider === provider);
 
   const handleLink = async (provider: SocialKey) => {
     setLinkMsg(null);

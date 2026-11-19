@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { Search, Lock, Unlock, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { SkeletonTableRows } from '@/components/layout/RouteSkeletons';
 
 interface UserRow {
   id: number;
@@ -209,12 +210,7 @@ export default function AdminUsersPage() {
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="py-10 text-center text-xs text-neutral-400">
-                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-                      Đang tải danh sách...
-                    </td>
-                  </tr>
+                  <SkeletonTableRows rows={6} cols={7} />
                 ) : users.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-10 text-center text-xs text-neutral-400">

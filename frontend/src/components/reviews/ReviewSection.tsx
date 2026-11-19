@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/utils';
 import { ReviewFormModal } from '@/components/reviews/ReviewFormModal';
 import {
@@ -276,9 +277,21 @@ export function ReviewSection({
         {/* Reviews List */}
         <div className="space-y-4">
           {isLoading ? (
-            <div className="py-12 text-center space-y-3">
-              <div className="w-7 h-7 border-2 border-sport-500 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className="text-xs text-neutral-400">Đang tải các đánh giá mới nhất...</p>
+            <div role="status" aria-label="Đang tải dữ liệu" className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 space-y-3 animate-fade-in-up" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-9 w-9 rounded-full" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-3 w-1/4" />
+                      <Skeleton className="h-3 w-1/6" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-4/5" />
+                </div>
+              ))}
+              <span className="sr-only">Đang tải dữ liệu…</span>
             </div>
           ) : reviews.length === 0 ? (
             <div className="py-12 text-center rounded-xl border border-dashed border-neutral-200 dark:border-neutral-800 space-y-2">
