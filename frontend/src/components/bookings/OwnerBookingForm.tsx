@@ -125,7 +125,7 @@ export function OwnerBookingForm({
       }
     };
     void refresh();
-    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 3000);
+    const timer = setInterval(() => { if (!document.hidden) void refresh(); }, 12000);
     window.addEventListener("focus", refresh);
     return () => {
       ac.abort();

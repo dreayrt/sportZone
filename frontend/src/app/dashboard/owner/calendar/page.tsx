@@ -16,7 +16,6 @@ import {
   Phone,
 } from "lucide-react";
 import { useOwnerVenue } from "@/context/OwnerVenueContext";
-import { OwnerBookingForm } from "@/components/bookings/OwnerBookingForm";
 import {
   Notice,
   inputClass,
@@ -31,6 +30,9 @@ import {
   PaymentStatus,
 } from "@/lib/owner-api";
 import { formatVND } from "@/lib/utils";
+import dynamic from 'next/dynamic';
+
+const OwnerBookingForm = dynamic(() => import('@/components/bookings/OwnerBookingForm').then((m) => m.OwnerBookingForm), { ssr: false });
 
 interface TimelineSlot {
   is_held: boolean;
@@ -102,7 +104,7 @@ export default function OwnerCalendarPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (!form && !document.hidden) void load(true);
-    }, 3000);
+    }, 12000);
     return () => clearInterval(timer);
   }, [load, form]);
   const shift = (days: number) => {

@@ -37,8 +37,17 @@ echo   Endpoint: http://127.0.0.1:8000
 echo   Health Check: http://127.0.0.1:8000/api/v1/health
 echo ========================================================
 echo.
-rem AppServiceProvider runs pending migrations before artisan serve starts the server.
-php artisan serve --port=8000
+rem Apply pending migrations, then run PHP's built-in server directly.
+rem (artisan serve measured ~0.5s/request vs ~0.03s with php -S + OPcache on this machine.)
+php artisan migrate --force --no-interaction
+if errorlevel 1 (
+    echo [ERROR] Migration that bai. Dung khoi dong server.
+    pause
+    exit /b 1
+)
+rem server.php resolves index.php from the current directory, so it must run inside public\.
+cd public
+php -S 127.0.0.1:8000 -t . ..\vendor\laravel\framework\src\Illuminate\Foundation\resources\server.php
 set "SERVER_EXIT_CODE=%ERRORLEVEL%"
 if not "%SERVER_EXIT_CODE%"=="0" echo [ERROR] Khoi dong that bai. Kiem tra MySQL, migration va thong bao ben tren.
 pause

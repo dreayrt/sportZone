@@ -111,11 +111,10 @@ class ReviewController extends BaseController
 
         $user = $request->user();
 
-        // Tìm các đơn completed của user tại venue này chưa từng được review
+        // Chỉ cần user có ít nhất 1 đơn completed tại venue này là được đánh giá, không giới hạn số lượt.
         $bookings = Booking::where('user_id', $user->id)
             ->where('venue_id', $venue->id)
             ->where('status', 'completed')
-            ->whereDoesntHave('review')
             ->with('court:id,name,code')
             ->orderBy('id', 'desc')
             ->get(['id', 'booking_code', 'venue_id', 'court_id', 'booking_date', 'start_time', 'end_time']);
@@ -169,13 +168,7 @@ class ReviewController extends BaseController
             return $this->errorResponse('Chỉ có thể đánh giá đơn đặt sân đã hoàn thành thi đấu.', 422);
         }
 
-        // 4. Kiểm tra booking đã từng được đánh giá chưa
-        $alreadyReviewed = Review::where('booking_id', $booking->id)->exists();
-        if ($alreadyReviewed) {
-            return $this->errorResponse('Đơn đặt sân này đã được đánh giá trước đó.', 422);
-        }
-
-        // 5. Xác định venue_id từ relationship thật trong project (không tin venue_id từ client gửi)
+        // 4. Xác định venue_id từ relationship thật trong project (không tin venue_id từ client gửi)
         $venueId = $booking->venue_id ?: $booking->court?->venue_id;
         if (! $venueId) {
             return $this->errorResponse('Không xác định được cơ sở thể thao của đơn đặt sân này.', 422);

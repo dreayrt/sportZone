@@ -11,8 +11,11 @@ import {
   buttonClass,
   secondaryClass,
 } from "@/components/venues/Shared";
-import CourtCalendar from "@/components/venues/CourtCalendar";
 import { DetailRouteSkeleton } from "@/components/layout/RouteSkeletons";
+import dynamic from 'next/dynamic';
+import { SkeletonPanel } from '@/components/layout/RouteSkeletons';
+
+const CourtCalendar = dynamic(() => import('@/components/venues/CourtCalendar'), { loading: () => <SkeletonPanel height="min-h-96" /> });
 export default function Page() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();

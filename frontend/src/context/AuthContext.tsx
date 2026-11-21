@@ -60,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await api.auth.me();
       if (res.success && res.data) {
         setUser(res.data);
+        localStorage.setItem('sz_user_data', JSON.stringify(res.data));
       } else {
         removeStoredToken();
         setUser(null);
@@ -82,6 +83,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Hydrate instantly from the cached profile so pages render without waiting
+    // for /auth/me, then revalidate in the background.
+    if (getStoredToken()) {
+      try {
+        const cached = localStorage.getItem('sz_user_data');
+        if (cached) {
+          setUser(JSON.parse(cached));
+          setIsLoading(false);
+        }
+      } catch {
+        // Ignore a corrupt cache; refreshUser decides.
+      }
+    }
     refreshUser();
   }, []);
 

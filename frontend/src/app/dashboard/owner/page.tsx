@@ -12,7 +12,6 @@ import {
   Plus,
   Trophy,
 } from "lucide-react";
-import { AnalyticsBarChart } from "@/components/dashboard/AnalyticsBarChart";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -20,6 +19,9 @@ import { api, type OwnerAnalyticsData } from "@/lib/api";
 import { formatVND } from "@/lib/utils";
 import { SkeletonPanel, SkeletonStats } from "@/components/layout/RouteSkeletons";
 import { useOwnerVenue } from "@/context/OwnerVenueContext";
+import dynamic from 'next/dynamic';
+
+const AnalyticsBarChart = dynamic(() => import('@/components/dashboard/AnalyticsBarChart').then((m) => m.AnalyticsBarChart), { loading: () => <SkeletonPanel height="min-h-64" /> });
 
 const bookingStatusLabels: Array<{
   key: keyof OwnerAnalyticsData["booking_statistics"];

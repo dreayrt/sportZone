@@ -5,8 +5,11 @@ import Link from "next/link";
 import { Building2, CalendarDays } from "lucide-react";
 import { Notice, inputClass, secondaryClass } from "@/components/venues/Shared";
 import { SkeletonCards } from "@/components/layout/RouteSkeletons";
-import CourtCalendar from "@/components/venues/CourtCalendar";
 import { Court, Venue, venueRequest } from "@/lib/venues-api";
+import dynamic from 'next/dynamic';
+import { SkeletonPanel } from '@/components/layout/RouteSkeletons';
+
+const CourtCalendar = dynamic(() => import('@/components/venues/CourtCalendar'), { loading: () => <SkeletonPanel height="min-h-96" /> });
 
 interface AdminVenueDetail {
   venue: Venue & { courts?: Court[] };

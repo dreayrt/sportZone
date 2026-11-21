@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -21,12 +21,15 @@ import {
 
 export function Navbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
-  const [sportFilter, setSportFilter] = useState('');
+  // Link the user just clicked: highlighted immediately, before the route finishes loading.
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const currentSearch = searchParams.toString();
 
   useEffect(() => {
-    setSportFilter(new URLSearchParams(window.location.search).get('sport') || '');
-  }, [pathname]);
+    setPendingHref(null);
+  }, [pathname, currentSearch]);
 
   const isDashboard = pathname.startsWith('/dashboard');
 
@@ -34,12 +37,16 @@ export function Navbar() {
     return null; // Dashboard has its own sidebar & header
   }
 
+  const target = pendingHref ? new URL(pendingHref, 'http://local') : null;
+  const effectivePath = target ? target.pathname : pathname;
+  const sportFilter = (target ? target.searchParams.get('sport') : searchParams.get('sport')) || '';
+
   const navItems = [
-    { href: '/venues', label: 'Tìm sân thể thao', icon: Compass, active: pathname.startsWith('/venues') && !sportFilter },
-    { href: '/venues?sport=pickleball', label: 'Pickleball & Tennis', icon: Flame, active: pathname.startsWith('/venues') && sportFilter === 'pickleball' },
-    { href: '/venues?sport=football', label: 'Bóng đá mini', icon: Trophy, active: pathname.startsWith('/venues') && sportFilter === 'football' },
-    { href: '/venues?sport=badminton', label: 'Cầu lông', icon: Zap, active: pathname.startsWith('/venues') && sportFilter === 'badminton' },
-    { href: '/matches', label: 'Ghép kèo', icon: Users, active: pathname.startsWith('/matches') },
+    { href: '/venues', label: 'Tìm sân thể thao', icon: Compass, active: effectivePath.startsWith('/venues') && !sportFilter },
+    { href: '/venues?sport=pickleball', label: 'Pickleball & Tennis', icon: Flame, active: effectivePath.startsWith('/venues') && sportFilter === 'pickleball' },
+    { href: '/venues?sport=football', label: 'Bóng đá mini', icon: Trophy, active: effectivePath.startsWith('/venues') && sportFilter === 'football' },
+    { href: '/venues?sport=badminton', label: 'Cầu lông', icon: Zap, active: effectivePath.startsWith('/venues') && sportFilter === 'badminton' },
+    { href: '/matches', label: 'Ghép kèo', icon: Users, active: effectivePath.startsWith('/matches') },
   ];
 
   const getDashboardLink = () => {
@@ -88,6 +95,7 @@ export function Navbar() {
               <Link
                 key={href}
                 href={href}
+                onClick={() => setPendingHref(href)}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   "px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2 whitespace-nowrap",

@@ -5,7 +5,10 @@ import Link from "next/link";
 import { CalendarDays } from "lucide-react";
 import { useOwnerVenue } from "@/context/OwnerVenueContext";
 import { Notice, inputClass, secondaryClass } from "@/components/venues/Shared";
-import CourtCalendar from "@/components/venues/CourtCalendar";
+import dynamic from 'next/dynamic';
+import { SkeletonPanel } from '@/components/layout/RouteSkeletons';
+
+const CourtCalendar = dynamic(() => import('@/components/venues/CourtCalendar'), { loading: () => <SkeletonPanel height="min-h-96" /> });
 
 export default function Page() {
   const { venue } = useOwnerVenue();

@@ -177,7 +177,7 @@ export function ReviewFormModal({
                   Chưa Đủ Điều Kiện Đánh Giá
                 </h4>
                 <p className="text-xs text-neutral-500 max-w-xs mx-auto leading-relaxed">
-                  Để đảm bảo tính khách quan, bạn cần hoàn thành ít nhất <strong>1 lượt đặt sân (Completed)</strong> tại cơ sở này và chưa từng đánh giá đơn đó trước đây.
+                  Để đảm bảo tính khách quan, bạn cần hoàn thành ít nhất <strong>1 lượt đặt sân (Completed)</strong> tại cơ sở này. Sau đó bạn có thể đánh giá không giới hạn số lượt.
                 </p>
               </div>
               <div className="pt-2">

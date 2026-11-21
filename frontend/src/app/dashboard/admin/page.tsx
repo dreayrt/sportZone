@@ -11,13 +11,15 @@ import {
   UserRoundCheck,
   Users,
 } from 'lucide-react';
-import { AnalyticsBarChart } from '@/components/dashboard/AnalyticsBarChart';
 import { DashboardHeader } from '@/components/layout/DashboardHeader';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { api, type AdminAnalyticsData } from '@/lib/api';
 import { formatVND } from '@/lib/utils';
 import { SkeletonPanel, SkeletonStats } from '@/components/layout/RouteSkeletons';
+import dynamic from 'next/dynamic';
+
+const AnalyticsBarChart = dynamic(() => import('@/components/dashboard/AnalyticsBarChart').then((m) => m.AnalyticsBarChart), { loading: () => <SkeletonPanel height="min-h-64" /> });
 
 const bookingStatusLabels: Array<{
   key: keyof AdminAnalyticsData['booking_statistics'];

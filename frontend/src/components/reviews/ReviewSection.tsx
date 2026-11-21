@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatDate } from '@/lib/utils';
-import { ReviewFormModal } from '@/components/reviews/ReviewFormModal';
 import {
   Star,
   MessageSquare,
@@ -21,6 +20,9 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const ReviewFormModal = dynamic(() => import('@/components/reviews/ReviewFormModal').then((m) => m.ReviewFormModal), { ssr: false });
 
 interface ReviewItem {
   id: number;
@@ -408,13 +410,15 @@ export function ReviewSection({
       </CardContent>
 
       {/* Review Modal Form */}
-      <ReviewFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        venueId={venueId}
-        venueName={venueName}
-        onSuccess={handleReviewSuccess}
-      />
+      {isModalOpen && (
+        <ReviewFormModal
+          isOpen
+          onClose={() => setIsModalOpen(false)}
+          venueId={venueId}
+          venueName={venueName}
+          onSuccess={handleReviewSuccess}
+        />
+      )}
     </Card>
   );
 }

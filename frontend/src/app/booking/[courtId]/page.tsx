@@ -207,7 +207,7 @@ export default function BookingWizardPage() {
       setIsSlotsLoading(false);
     }
     fetchSlots();
-    const interval = window.setInterval(() => { if (!document.hidden) void fetchSlots(); }, 3000);
+    const interval = window.setInterval(() => { if (!document.hidden) void fetchSlots(); }, 12000);
     const onFocus = () => void fetchSlots();
     window.addEventListener('focus', onFocus);
     return () => { isMounted = false; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };

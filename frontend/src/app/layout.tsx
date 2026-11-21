@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { NavigationProgress } from '@/components/layout/NavigationProgress';
 import { Barlow_Condensed, Be_Vietnam_Pro } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
-import { FloatingChatbotWidget } from '@/components/ai/FloatingChatbotWidget';
+import { LazyChatbotWidget } from '@/components/ai/LazyChatbotWidget';
 
 const sans = Be_Vietnam_Pro({
   subsets: ['latin', 'vietnamese'],
@@ -35,12 +37,15 @@ export default function RootLayout({
     <html lang="vi" className={`scroll-smooth ${sans.variable} ${display.variable}`}>
       <body className="min-h-[100dvh] flex flex-col bg-[#FAFAFA] text-neutral-900 antialiased font-sans selection:bg-sport-500 selection:text-white dark:bg-[#090A0D] dark:text-neutral-100">
         <AuthProvider>
-          <Navbar />
+          <Suspense fallback={null}>
+            <NavigationProgress />
+            <Navbar />
+          </Suspense>
           <main className="flex-1">
             {children}
           </main>
           <Footer />
-          <FloatingChatbotWidget />
+          <LazyChatbotWidget />
         </AuthProvider>
       </body>
     </html>

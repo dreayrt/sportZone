@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DashboardHeader } from "@/components/layout/DashboardHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { BookingQrScanner } from "@/components/bookings/BookingQrScanner";
 import { parseBookingCheckInCode } from "@/lib/booking-checkin-code";
-import { OwnerBookingForm } from "@/components/bookings/OwnerBookingForm";
 import { OwnerModal } from "@/components/bookings/OwnerModal";
 import {
   Notice,
@@ -25,6 +23,10 @@ import {
 import { formatVND, formatDate } from "@/lib/utils";
 import { SepayPaymentQr } from "@/lib/api";
 import { useOwnerVenue } from "@/context/OwnerVenueContext";
+import dynamic from 'next/dynamic';
+
+const BookingQrScanner = dynamic(() => import('@/components/bookings/BookingQrScanner').then((m) => m.BookingQrScanner), { ssr: false });
+const OwnerBookingForm = dynamic(() => import('@/components/bookings/OwnerBookingForm').then((m) => m.OwnerBookingForm), { ssr: false });
 
 const emptyFilters = {
   search: "",
